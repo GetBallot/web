@@ -3,7 +3,38 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 admin.initializeApp();
 
+const SOURCE_GOOGLE = 'civicinfo#voterInfoResponse';
 const SOURCE_BALLOT = 'getballot.com';
+
+exports.userVoterInfoWritten = functions.firestore
+  .document('users/{userId}/triggers/voterinfo')
+  .onWrite((change, context) => {
+    if (!change.after.exists) {
+      return;
+    }
+    const db = admin.firestore();
+    const userId = context.params.userId;
+    const data = change.after.data();
+    const lang = data.lang;
+
+    const election = data.voterinfo;
+    election['source'] = SOURCE_GOOGLE;
+
+    election.election['electionDay']
+      = election.election['electionDay'].split('-').join('');
+
+    data.voterinfo.contests.forEach((contest) => {
+      if (contest.referendumTitle !== null) {
+        contest['name'] = contest.referendumTitle;
+      }
+      if (contest.office !== null) {
+        contest['name'] = contest.office;
+      }
+    })
+
+    return _getUpcomingElectionRef(db, userId)
+      .set(election);
+  });
 
 exports.userRepresentativesWritten = functions.firestore
   .document('users/{userId}/triggers/representatives')
@@ -11,36 +42,44 @@ exports.userRepresentativesWritten = functions.firestore
     if (!change.after.exists) {
       return;
     }
-    const db = admin.firestore();
-    const data = change.after.data();
-    const lang = data.lang;
 
-    const promises = [];
-    for (var ocd in data.representatives.divisions) {
-      promises.push(_getElectionPromise(db, lang, ocd));
+    const data = change.after.data();
+    if (!data.updateUpcomingElection) {
+      return;
     }
 
-    return Promise.all(promises)
-      .then(divisionsSnap => {
-        const divisions = [];
-        divisionsSnap.forEach(electionsSnap => {
-          if (!electionsSnap.empty) {
-            electionsSnap.forEach(electionSnap => {
-              if (electionSnap.exists) {
-                const data = electionSnap.data();
-                data.division = electionSnap.ref.parent.parent.parent.parent.id;
-                divisions.push(data);
-              }
-            });
-          }
-        })
-        const election = _filterUpcomingElection(data.representatives.input, divisions);
-        return db
-          .collection('users').doc(context.params.userId)
-          .collection('elections').doc('upcoming')
-          .set(election);
-      });
+    const db = admin.firestore();
+    const userId = context.params.userId;
+    const lang = data.lang;
+
+    return _compileElectionFromRepresentatives(db, userId, data, lang);
   });
+
+function _compileElectionFromRepresentatives(db, userId, data, lang) {
+  const promises = [];
+  for (var ocd in data.representatives.divisions) {
+    promises.push(_getElectionPromise(db, lang, ocd));
+  }
+
+  return Promise.all(promises)
+    .then(divisionsSnap => {
+      const divisions = [];
+      divisionsSnap.forEach(electionsSnap => {
+        if (!electionsSnap.empty) {
+          electionsSnap.forEach(electionSnap => {
+            if (electionSnap.exists) {
+              const data = electionSnap.data();
+              data.division = electionSnap.ref.parent.parent.parent.parent.id;
+              divisions.push(data);
+            }
+          });
+        }
+      })
+      const election = _filterUpcomingElection(data.representatives.input, divisions);
+      return _getUpcomingElectionRef(db, userId)
+        .set(election);
+    });
+}
 
 function _filterUpcomingElection(input, divisions) {
   const election = {input: input, source: SOURCE_BALLOT}
@@ -85,6 +124,12 @@ function _getElectionPromise(db, lang, ocd) {
     .orderBy('electionDay')
     .limit(1)
     .get();
+}
+
+function _getUpcomingElectionRef(db, userId) {
+  return db
+    .collection('users').doc(userId)
+    .collection('elections').doc('upcoming');
 }
 
 function _today() {
