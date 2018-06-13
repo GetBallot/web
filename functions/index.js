@@ -18,10 +18,11 @@ exports.userVoterInfoWritten = functions.firestore
     const lang = data.lang;
 
     const election = data.voterinfo;
-    election['source'] = SOURCE_GOOGLE;
+    election.lang = lang;
+    election.source = SOURCE_GOOGLE;
 
-    election.election['electionDay']
-      = election.election['electionDay'].split('-').join('');
+    election.election.electionDay
+      = election.election.electionDay.split('-').join('');
 
     const promises = [];
     
@@ -43,7 +44,7 @@ exports.userVoterInfoWritten = functions.firestore
 
       if (division !== null && contest.name !== null) {
         contest['divisionContest'] = _sanitize(division + '|' + contest.name);
-        promises.push(_createDivisionContest(db, user, contest));
+        promises.push(_createDivisionContest(db, userId, contest));
       }
     })
 
@@ -70,6 +71,52 @@ exports.userRepresentativesWritten = functions.firestore
 
     return _compileElectionFromRepresentatives(db, userId, data, lang);
   });
+
+exports.userUpcomingElectionWritten = functions.firestore
+  .document('users/{userId}/elections/upcoming')
+  .onWrite((change, context) => {
+    const userId = context.params.userId;
+
+    const promises = [];
+
+    if (change.before.exists) {
+      const snap = change.before;
+      const lambda = ref => 
+        ref.delete();
+      promises.concat(_updateUserElectionSubscriptions(snap, userId, lambda));
+    }
+
+    if (change.after.exists) {
+      const snap = change.after;
+      const lambda = ref =>
+        ref.set({'creationTime': admin.firestore.FieldValue.serverTimestamp()});
+      promises.concat(_updateUserElectionSubscriptions(snap, userId, lambda));
+    }
+
+    return Promise.all(promises);
+  });
+
+function _updateUserElectionSubscriptions(snap, userId, lambda) {
+  const db = admin.firestore();
+  const election = snap.data();    
+  const lang = election.lang;
+
+  if (election.source === SOURCE_GOOGLE && election.election.id !== null) {
+    const ref = db
+      .collection('elections').doc(election.election.id)
+      .collection('users').doc(userId);
+    return lambda(ref);  
+  }
+
+  return election.contests
+    .filter(contest => contest.division !== null)
+    .map(contest => db
+      .collection('divisions').doc(contest.division)
+      .collection('langs').doc(lang)
+      .collection('elections').doc(election.election.electionDay)
+      .collection('users').doc(userId))
+    .map(lambda);
+}  
 
 exports.contestWritten = functions.firestore
   .document('divisions/{ocd}/langs/{lang}/elections/{electionId}/contests/{contestId}')
@@ -110,8 +157,8 @@ function _compileElectionFromRepresentatives(db, userId, data, lang) {
         }
       })
       const election = _filterUpcomingElection(data.representatives.input, divisions);
-      return _getUpcomingElectionRef(db, userId)
-        .set(election);
+      election.lang = lang;
+      return _getUpcomingElectionRef(db, userId).set(election);
     });
 }
 
