@@ -71,6 +71,24 @@ exports.userRepresentativesWritten = functions.firestore
     return _compileElectionFromRepresentatives(db, userId, data, lang);
   });
 
+exports.contestWritten = functions.firestore
+  .document('divisions/{ocd}/langs/{lang}/elections/{electionId}/contests/{contestId}')
+  .onWrite((change, context) => {
+    const db = admin.firestore();
+    const collectionRef = change.after.ref.parent;    
+  
+    return collectionRef.get()
+      .then(querySnapshot => {
+        const contests = [];
+        querySnapshot.forEach(contestSnap => {
+          const contest = contestSnap.data();
+          contest.id = contestSnap.ref.id;
+          contests.push(contest);
+        });
+        return collectionRef.parent.set({'contests': contests}, {merge: true});
+      });
+  });
+
 function _compileElectionFromRepresentatives(db, userId, data, lang) {
   const promises = [];
   for (var ocd in data.representatives.divisions) {
