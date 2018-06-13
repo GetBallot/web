@@ -23,17 +23,33 @@ exports.userVoterInfoWritten = functions.firestore
     election.election['electionDay']
       = election.election['electionDay'].split('-').join('');
 
+    const promises = [];
+    
     data.voterinfo.contests.forEach((contest) => {
+      var division = null;
+      if (contest.district !== null) {
+        division = contest.district.name;
+      }
+      if (contest.level !== null && contest.level.length > 0) {
+        division = contest.level[0];
+      }
+
       if (contest.referendumTitle !== null) {
         contest['name'] = contest.referendumTitle;
       }
       if (contest.office !== null) {
         contest['name'] = contest.office;
       }
+
+      if (division !== null && contest.name !== null) {
+        contest['divisionContest'] = _sanitize(division + '|' + contest.name);
+        promises.push(_createDivisionContest(db, user, contest));
+      }
     })
 
-    return _getUpcomingElectionRef(db, userId)
-      .set(election);
+    promises.unshift(_getUpcomingElectionRef(db, userId).set(election));
+
+    return Promise.all(promises);  
   });
 
 exports.userRepresentativesWritten = functions.firestore
@@ -132,6 +148,12 @@ function _getUpcomingElectionRef(db, userId) {
     .collection('elections').doc('upcoming');
 }
 
+function _createDivisionContest(db, userId, contest) {
+  return _getUpcomingElectionRef(db, userId)
+    .collection('contests').doc(contest.divisionContest)
+    .set(contest);
+}
+
 function _today() {
   var today = new Date();
   var dd = today.getDate();
@@ -149,6 +171,6 @@ function _today() {
   return yyyy + '' + mm + '' + dd;
 }
 
-function _sanitize(ocd) {
-  return ocd.split('/').join(',')
+function _sanitize(id) {
+  return id.split('/').join(',')
 }
