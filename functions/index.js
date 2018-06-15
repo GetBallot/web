@@ -46,7 +46,7 @@ exports.userRepresentativesWritten = functions.firestore
     }
 
     const data = change.after.data();
-    if (!data.updateUpcomingElection) {
+    if (data.updateUpcomingElection === null) {
       return;
     }
 
@@ -81,6 +81,34 @@ exports.userUpcomingElectionWritten = functions.firestore
     return Promise.all(promises);
   });
 
+exports.contestWritten = functions.firestore
+  .document('divisions/{ocd}/langs/{lang}/elections/{electionId}/contests/{contestId}')
+  .onWrite((change, context) => {
+    return _summarizeArray(change.after.ref, 'contests');
+  });
+
+exports.candidateWritten = functions.firestore
+  .document('divisions/{ocd}/langs/{lang}/elections/{electionId}/contests/{contestId}/candidates/{candidateId}')
+  .onWrite((change, context) => {
+    return _summarizeArray(change.after.ref, 'candidates');
+  });
+
+function _summarizeArray(ref, itemsKey) {
+  const collectionRef = ref.parent;
+  return collectionRef.get()
+    .then(querySnapshot => {
+      const items = [];
+      querySnapshot.forEach(itemSnap => {
+        const item = itemSnap.data();
+        item.id = itemSnap.ref.id;
+        items.push(item);
+      });
+      const data = {};
+      data[itemsKey] = items;
+      return collectionRef.parent.set(data, {merge: true});
+    });
+}
+
 function _updateUserElectionSubscriptions(snap, userId, lambda) {
   const db = admin.firestore();
   const election = snap.data();    
@@ -104,25 +132,7 @@ function _updateUserElectionSubscriptions(snap, userId, lambda) {
         .collection('users').doc(userId))
       .map(lambda);
   }
-}  
-
-exports.contestWritten = functions.firestore
-  .document('divisions/{ocd}/langs/{lang}/elections/{electionId}/contests/{contestId}')
-  .onWrite((change, context) => {
-    const db = admin.firestore();
-    const collectionRef = change.after.ref.parent;    
-  
-    return collectionRef.get()
-      .then(querySnapshot => {
-        const contests = [];
-        querySnapshot.forEach(contestSnap => {
-          const contest = contestSnap.data();
-          contest.id = contestSnap.ref.id;
-          contests.push(contest);
-        });
-        return collectionRef.parent.set({'contests': contests}, {merge: true});
-      });
-  });
+}
 
 function _compileElectionFromRepresentatives(db, userId, data, lang) {
   const promises = [];
