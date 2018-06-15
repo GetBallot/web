@@ -81,6 +81,23 @@ exports.userUpcomingElectionWritten = functions.firestore
     return Promise.all(promises);
   });
 
+exports.electionWritten = functions.firestore
+  .document('divisions/{ocd}/langs/{lang}/elections/{electionId}')
+  .onWrite((change, context) => {
+    return change.after.ref.collection('users').get()
+      .then(querySnapshot => {
+        const promises = [];
+        querySnapshot.forEach(userSnap => {
+            const userId = userSnap.id;
+            promises.push(admin.firestore()
+              .collection('users').doc(userId)
+              .collection('triggers').doc('representatives')
+              .set({'updateUpcomingElection': admin.firestore.FieldValue.serverTimestamp()}, {merge: true}));
+          });
+        return Promise.all(promises);
+      })
+  });
+
 exports.contestWritten = functions.firestore
   .document('divisions/{ocd}/langs/{lang}/elections/{electionId}/contests/{contestId}')
   .onWrite((change, context) => {
