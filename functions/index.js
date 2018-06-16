@@ -26,11 +26,27 @@ exports.userVoterInfoWritten = functions.firestore
     
     if (data.voterinfo.contests !== null) {
       data.voterinfo.contests.forEach((contest) => {
+        const district = contest.district.name;
+
         if (contest.referendumTitle !== null) {
-          contest['name'] = contest.referendumTitle;
+          contest.name = contest.referendumTitle;
         }
         if (contest.office !== null) {
-          contest['name'] = contest.office;
+          contest.name = contest.office;
+        }
+
+        const favIdPrefix = [election.election.id, district, contest.name].join('|');
+
+        if (contest.candidates !== null) {
+          contest.candidates.forEach((candidate) => {
+            candidate.favId = _sanitize(favIdPrefix + '|' + candidate.name);
+          });
+        }
+
+        if (contest.referendumBallotResponses !== null) {
+          contest.referendumBallotResponses.forEach((response) => {
+            candidate.favId = _sanitize(favIdPrefix + '|' + response);
+          });
         }
       })
     }
@@ -138,10 +154,9 @@ function _updateUserElectionSubscriptions(snap, userId, lambda) {
     return lambda(ref);  
   }
 
-  if (election.contests !== null) {
+  if ('contests' in election) {
     return election.contests
-      .filter(contest => contest !== null)
-      .filter(contest => contest.division !== null)
+      .filter(contest => 'division' in contest)
       .map(contest => db
         .collection('divisions').doc(contest.division)
         .collection('langs').doc(lang)
@@ -197,6 +212,17 @@ function _filterUpcomingElection(input, divisions) {
     .sort((a, b) => String(a.division).localeCompare(b.division))
     .map(division => division.contests.map(contest => {
        contest.division = division.division;
+       
+       if ('candidates' in contest) {
+         contest.candidates.map(candidate => {
+           candidate.favId = _sanitize([
+            upcoming.electionDay, 
+            division.division, 
+             contest.id,
+             candidate.id].join('|'));
+         });
+       }
+
        return contest
     }))
     .reduce((acc, val) => acc.concat(val), []);
