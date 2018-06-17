@@ -62,15 +62,13 @@ exports.userRepresentativesWritten = functions.firestore
     }
 
     const data = change.after.data();
-    if (data.updateUpcomingElection === null) {
-      return;
+    if ('updateUpcomingElection' in data) {
+      const db = admin.firestore();
+      const userId = context.params.userId;
+      const lang = data.lang;
+
+      return _compileElectionFromRepresentatives(db, userId, data, lang);
     }
-
-    const db = admin.firestore();
-    const userId = context.params.userId;
-    const lang = data.lang;
-
-    return _compileElectionFromRepresentatives(db, userId, data, lang);
   });
 
 exports.userUpcomingElectionWritten = functions.firestore
