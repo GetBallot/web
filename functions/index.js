@@ -101,6 +101,9 @@ exports.electionWritten = functions.firestore
     return change.after.ref.collection('users').get()
       .then(querySnapshot => {
         const promises = [];
+
+        promises.concat(_copyElectionSupplement(change.after.data()));
+
         querySnapshot.forEach(userSnap => {
             const userId = userSnap.id;
             promises.push(admin.firestore()
@@ -108,29 +111,66 @@ exports.electionWritten = functions.firestore
               .collection('triggers').doc('representatives')
               .set({'updateUpcomingElection': admin.firestore.FieldValue.serverTimestamp()}, {merge: true}));
           });
+
         return Promise.all(promises);
       })
   });
 
+function _copyElectionSupplement(election) {
+  const updates = {};
+  if ('contests' in election) {
+    election.contests.forEach(contest => {
+      if ('candidates' in contest) {
+        contest.candidates.forEach(candidate => {
+          if ('canonicalId' in candidate && 'favIds' in candidate) {
+            candidate.favIds.forEach(favId => {
+              const electionId = favId.split('|')[0];
+              if (!(electionId in updates)) {
+                updates[electionId] = {};
+              }         
+              const update = updates[electionId];
+              if (!('favIdMap' in update)) {
+                update.favIdMap = {};
+              }              
+              update.favIdMap[favId] = candidate.canonicalId;
+            })
+          }
+        })
+      }
+    })
+  }
+
+  return Object.keys(updates).map(electionId => 
+      admin.firestore()
+        .collection('elections').doc(electionId)
+        .set(updates[electionId], {merge: true})
+    );
+  }
+
 exports.contestWritten = functions.firestore
-  .document('divisions/{ocd}/langs/{lang}/elections/{electionId}/contests/{contestId}')
+  .document('divisions/{ocd}/langs/{lang}/elections/{electionDay}/contests/{contestId}')
   .onWrite((change, context) => {
-    return _summarizeArray(change.after.ref, 'contests');
+    return _summarizeArray(change.after.ref, context, 'contests');
   });
 
 exports.candidateWritten = functions.firestore
-  .document('divisions/{ocd}/langs/{lang}/elections/{electionId}/contests/{contestId}/candidates/{candidateId}')
+  .document('divisions/{ocd}/langs/{lang}/elections/{electionDay}/contests/{contestId}/candidates/{candidateId}')
   .onWrite((change, context) => {
-    return _summarizeArray(change.after.ref, 'candidates');
+    return _summarizeArray(change.after.ref, context, 'candidates');
   });
 
-function _summarizeArray(ref, itemsKey) {
+function _summarizeArray(ref, context, itemsKey) {
   const collectionRef = ref.parent;
   return collectionRef.get()
     .then(querySnapshot => {
       const items = [];
       querySnapshot.forEach(itemSnap => {
         const item = itemSnap.data();
+        item.canonicalId = _sanitize([
+          context.params.electionDay, 
+          context.params.ocd,
+          context.params.contestId, 
+          context.params.candidateId].join('|'));
         item.id = itemSnap.ref.id;
         items.push(item);
       });
