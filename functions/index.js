@@ -166,11 +166,11 @@ function _summarizeArray(ref, context, itemsKey) {
       const items = [];
       querySnapshot.forEach(itemSnap => {
         const item = itemSnap.data();
-        item.canonicalId = _sanitize([
-          context.params.electionDay, 
-          context.params.ocd,
-          context.params.contestId, 
-          context.params.candidateId].join('|'));
+        item.canonicalId = 
+          _sanitize(['electionDay', 'ocd','contestId', 'candidateId']
+            .filter(key => key in context.params)
+            .map(key => context.params[key])
+          .join('|'));
         item.id = itemSnap.ref.id;
         items.push(item);
       });
