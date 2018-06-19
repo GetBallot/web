@@ -127,11 +127,17 @@ function _copyElectionSupplement(election) {
               const electionId = favId.split('|')[0];
               if (!(electionId in updates)) {
                 updates[electionId] = {};
-              }         
+              }
               const update = updates[electionId];
+              
+              if (!('candidates' in update)) {
+                update.candidates = {};
+              }
+              update.candidates[candidate.canonicalId] = candidate;
+
               if (!('favIdMap' in update)) {
                 update.favIdMap = {};
-              }              
+              }                    
               update.favIdMap[favId] = candidate.canonicalId;
             })
           }
