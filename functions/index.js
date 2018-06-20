@@ -125,12 +125,15 @@ function _summarizeArray(ref, context, itemsKey) {
       const items = [];
       querySnapshot.forEach(itemSnap => {
         const item = itemSnap.data();
-        item.canonicalId = 
-          _sanitize(['electionDay', 'ocd','contestId', 'candidateId']
-            .filter(key => key in context.params)
-            .map(key => context.params[key])
-          .join('|'));
         item.id = itemSnap.ref.id;
+
+        const parts = [context.params.electionDay, context.params.ocd];        
+        if (itemsKey === 'candidates') {
+          parts.push(context.params.contestId);
+        }
+        parts.push(item.id);
+        item.canonicalId = _sanitize(parts.join('|'));
+
         items.push(item);
       });
       const data = {};
@@ -208,8 +211,23 @@ function _compileElectionFromRepresentatives(
     promises.push(_getElectionPromise(db, lang, ocd));
   }
 
+  const electionId = electionFromVoterInfo === null ? null :
+    electionFromVoterInfo.election.id;
+  
+  if (electionId !== null) {  
+    promises.push(db.collection('elections').doc(electionId).get());
+  }
+
   return Promise.all(promises)
     .then(divisionsSnap => {
+      var supplement = null;
+      if (electionId !== null) {
+        const snapshot = divisionsSnap.pop();
+        if (snapshot.exists) {
+          supplement = snapshot.data();
+        }
+      }
+            
       const divisions = [];
       divisionsSnap.forEach(electionsSnap => {
         if (!electionsSnap.empty) {
@@ -225,20 +243,62 @@ function _compileElectionFromRepresentatives(
       const electionFromRepresentatives = _filterUpcomingElection(data.input, divisions);
       electionFromRepresentatives.lang = lang;
 
-      const election = _mergeElections(electionFromVoterInfo, electionFromRepresentatives);
+      const election = _mergeElections(
+        electionFromVoterInfo, electionFromRepresentatives, supplement);
       return _getUpcomingElectionRef(db, userId).set(election);
     });
 }
 
-function _mergeElections(electionFromVoterInfo, electionFromRepresentatives) {
+function _mergeElections(electionFromVoterInfo, electionFromRepresentatives, supplement) {
   if (electionFromVoterInfo !== null) {
     if (electionFromVoterInfo.contests === null) {
       electionFromVoterInfo.contests = electionFromRepresentatives.contests;
+    } else {
+      if (supplement !== null && supplement.favIdMap) {
+        const candidatesMap = _createFavIdToCandidateMap(electionFromRepresentatives);
+        electionFromVoterInfo.contests.forEach(contest => {
+          if (contest.candidates) {
+            contest.candidates.forEach(candidate => {
+              _updateCandidateFavId(supplement.favIdMap, candidate);
+              if (candidatesMap[candidate.favId]) {
+                Object.assign(candidate, candidatesMap[candidate.favId]);
+              }
+            });
+          }
+        });
+      }
     }
   }
 
   return electionFromVoterInfo === null ? 
     electionFromRepresentatives : electionFromVoterInfo;
+}
+
+function _updateCandidateFavId(favIdMap, candidate) {
+  const favId = candidate.favId;
+  if (favId in favIdMap && favId !== favIdMap.favId) {
+    const canonicalFavId = favIdMap[favId];
+    Object.keys(favIdMap).forEach(key => {
+      if (favIdMap[key] === canonicalFavId) {
+        candidate.favId = canonicalFavId;
+        candidate.oldFavId = key;
+      }
+    });
+  }
+}
+
+function _createFavIdToCandidateMap(electionFromRepresentatives) {
+  const map = {};
+  if (electionFromRepresentatives.contests) {
+    electionFromRepresentatives.contests.forEach(contest => {
+      if (contest.candidates) {
+        contest.candidates.forEach(candidate => {
+          map[candidate.favId] = candidate;
+        });
+      }
+    })
+  }
+  return map;
 }
 
 function _filterUpcomingElection(input, divisions) {
