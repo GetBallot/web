@@ -20,11 +20,8 @@ exports.userCivicInfoWritten = functions.firestore
     const electionFromVoterInfo = data.voterinfo === undefined ? null :
       _compileElectionFromVoterinfo(data.voterinfo, lang);
 
-    if (electionFromVoterInfo === null) {
-      return _compileElectionFromRepresentatives(db, userId, data.representatives, lang);
-    } else {
-      return _getUpcomingElectionRef(db, userId).set(electionFromVoterInfo);
-    }
+    return _compileElectionFromRepresentatives(
+      db, userId, data.representatives, lang, electionFromVoterInfo);
   });
 
 exports.userUpcomingElectionWritten = functions.firestore
@@ -203,7 +200,9 @@ function _compileElectionFromVoterinfo(election, lang) {
   return election;
 }
 
-function _compileElectionFromRepresentatives(db, userId, data, lang) {
+function _compileElectionFromRepresentatives(
+  db, userId, data, lang, electionFromVoterInfo) {
+    
   const promises = [];
   for (var ocd in data.divisions) {
     promises.push(_getElectionPromise(db, lang, ocd));
@@ -223,10 +222,23 @@ function _compileElectionFromRepresentatives(db, userId, data, lang) {
           });
         }
       })
-      const election = _filterUpcomingElection(data.input, divisions);
-      election.lang = lang;
+      const electionFromRepresentatives = _filterUpcomingElection(data.input, divisions);
+      electionFromRepresentatives.lang = lang;
+
+      const election = _mergeElections(electionFromVoterInfo, electionFromRepresentatives);
       return _getUpcomingElectionRef(db, userId).set(election);
     });
+}
+
+function _mergeElections(electionFromVoterInfo, electionFromRepresentatives) {
+  if (electionFromVoterInfo !== null) {
+    if (electionFromVoterInfo.contests === null) {
+      electionFromVoterInfo.contests = electionFromRepresentatives.contests;
+    }
+  }
+
+  return electionFromVoterInfo === null ? 
+    electionFromRepresentatives : electionFromVoterInfo;
 }
 
 function _filterUpcomingElection(input, divisions) {
