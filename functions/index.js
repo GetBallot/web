@@ -6,8 +6,8 @@ admin.initializeApp();
 const SOURCE_GOOGLE = 'civicinfo#voterInfoResponse';
 const SOURCE_BALLOT = 'getballot.com';
 
-exports.userVoterInfoWritten = functions.firestore
-  .document('users/{userId}/triggers/voterinfo')
+exports.userCivicInfoWritten = functions.firestore
+  .document('users/{userId}/triggers/civicinfo')
   .onWrite((change, context) => {
     if (!change.after.exists) {
       return;
@@ -17,57 +17,13 @@ exports.userVoterInfoWritten = functions.firestore
     const data = change.after.data();
     const lang = data.lang;
 
-    const election = data.voterinfo;
-    election.lang = lang;
-    election.source = SOURCE_GOOGLE;
+    const electionFromVoterInfo = data.voterinfo === undefined ? null :
+      _compileElectionFromVoterinfo(data.voterinfo, lang);
 
-    election.election.electionDay
-      = election.election.electionDay.split('-').join('');
-    
-    if (data.voterinfo.contests !== null) {
-      data.voterinfo.contests.forEach((contest) => {
-        const district = contest.district.name;
-
-        if (contest.referendumTitle !== null) {
-          contest.name = contest.referendumTitle;
-        }
-        if (contest.office !== null) {
-          contest.name = contest.office;
-        }
-
-        const favIdPrefix = [election.election.id, district, contest.name].join('|');
-
-        if (contest.candidates !== null) {
-          contest.candidates.forEach((candidate) => {
-            candidate.favId = _sanitize(favIdPrefix + '|' + candidate.name);
-          });
-        }
-
-        if (contest.referendumBallotResponses !== null) {
-          contest.referendumBallotResponses.forEach((response) => {
-            candidate.favId = _sanitize(favIdPrefix + '|' + response);
-          });
-        }
-      })
-    }
-
-    return _getUpcomingElectionRef(db, userId).set(election);
-  });
-
-exports.userRepresentativesWritten = functions.firestore
-  .document('users/{userId}/triggers/representatives')
-  .onWrite((change, context) => {
-    if (!change.after.exists) {
-      return;
-    }
-
-    const data = change.after.data();
-    if ('updateUpcomingElection' in data) {
-      const db = admin.firestore();
-      const userId = context.params.userId;
-      const lang = data.lang;
-
-      return _compileElectionFromRepresentatives(db, userId, data, lang);
+    if (electionFromVoterInfo === null) {
+      return _compileElectionFromRepresentatives(db, userId, data.representatives, lang);
+    } else {
+      return _getUpcomingElectionRef(db, userId).set(electionFromVoterInfo);
     }
   });
 
@@ -108,7 +64,7 @@ exports.electionWritten = functions.firestore
             const userId = userSnap.id;
             promises.push(admin.firestore()
               .collection('users').doc(userId)
-              .collection('triggers').doc('representatives')
+              .collection('triggers').doc('civicinfo')
               .set({'updateUpcomingElection': admin.firestore.FieldValue.serverTimestamp()}, {merge: true}));
           });
 
@@ -210,9 +166,46 @@ function _updateUserElectionSubscriptions(snap, userId, lambda) {
   }
 }
 
+function _compileElectionFromVoterinfo(election, lang) {
+  election.lang = lang;
+  election.source = SOURCE_GOOGLE;
+
+  election.election.electionDay
+    = election.election.electionDay.split('-').join('');
+  
+  if (election.contests !== null) {
+    election.contests.forEach((contest) => {
+      const district = contest.district.name;
+
+      if (contest.referendumTitle !== null) {
+        contest.name = contest.referendumTitle;
+      }
+      if (contest.office !== null) {
+        contest.name = contest.office;
+      }
+
+      const favIdPrefix = [election.election.id, district, contest.name].join('|');
+
+      if (contest.candidates !== null) {
+        contest.candidates.forEach((candidate) => {
+          candidate.favId = _sanitize(favIdPrefix + '|' + candidate.name);
+        });
+      }
+
+      if (contest.referendumBallotResponses !== null) {
+        contest.referendumBallotResponses.forEach((response) => {
+          candidate.favId = _sanitize(favIdPrefix + '|' + response);
+        });
+      }
+    })
+  }
+
+  return election;
+}
+
 function _compileElectionFromRepresentatives(db, userId, data, lang) {
   const promises = [];
-  for (var ocd in data.representatives.divisions) {
+  for (var ocd in data.divisions) {
     promises.push(_getElectionPromise(db, lang, ocd));
   }
 
@@ -230,7 +223,7 @@ function _compileElectionFromRepresentatives(db, userId, data, lang) {
           });
         }
       })
-      const election = _filterUpcomingElection(data.representatives.input, divisions);
+      const election = _filterUpcomingElection(data.input, divisions);
       election.lang = lang;
       return _getUpcomingElectionRef(db, userId).set(election);
     });
