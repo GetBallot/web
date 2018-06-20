@@ -204,11 +204,12 @@ function _compileElectionFromVoterinfo(election, lang) {
 }
 
 function _compileElectionFromRepresentatives(
-  db, userId, data, lang, electionFromVoterInfo) {
-    
+  db, userId, data, lang, electionFromVoterInfo) {  
+  const electionDay = electionFromVoterInfo ? electionFromVoterInfo.election.electionDay : null;
+
   const promises = [];
   for (var ocd in data.divisions) {
-    promises.push(_getElectionPromise(db, lang, ocd));
+    promises.push(_getElectionPromise(db, lang, ocd, electionDay));
   }
 
   const electionId = electionFromVoterInfo === null ? null :
@@ -240,11 +241,13 @@ function _compileElectionFromRepresentatives(
           });
         }
       })
+
       const electionFromRepresentatives = _filterUpcomingElection(data.input, divisions);
       electionFromRepresentatives.lang = lang;
 
       const election = _mergeElections(
         electionFromVoterInfo, electionFromRepresentatives, supplement);
+      console.log(election);  
       return _getUpcomingElectionRef(db, userId).set(election);
     });
 }
@@ -252,7 +255,9 @@ function _compileElectionFromRepresentatives(
 function _mergeElections(electionFromVoterInfo, electionFromRepresentatives, supplement) {
   if (electionFromVoterInfo !== null) {
     if (electionFromVoterInfo.contests === null) {
-      electionFromVoterInfo.contests = electionFromRepresentatives.contests;
+      if (electionFromRepresentatives.contests) {
+        electionFromVoterInfo.contests = electionFromRepresentatives.contests;
+      }
     } else {
       if (supplement !== null && supplement.favIdMap) {
         const candidatesMap = _createFavIdToCandidateMap(electionFromRepresentatives);
@@ -345,16 +350,21 @@ function _filterUpcomingElection(input, divisions) {
   return election;
 }
 
-function _getElectionPromise(db, lang, ocd) {
+function _getElectionPromise(db, lang, ocd, electionDay) {
   const sanitizedOcd = _sanitize(ocd);
-  return db
+  const refPrefix = db
     .collection('divisions').doc(sanitizedOcd)
     .collection('langs').doc(lang)
     .collection('elections')
-    .where('electionDay', '>=', _today())
-    .orderBy('electionDay')
-    .limit(1)
-    .get();
+    
+  const ref = electionDay ? 
+    refPrefix
+      .where('electionDay', '==', electionDay) : 
+    refPrefix
+      .where('electionDay', '>=', _today())
+      .orderBy('electionDay');
+
+  return ref.limit(1).get();
 }
 
 function _getUpcomingElectionRef(db, userId) {
