@@ -35,14 +35,14 @@ exports.userUpcomingElectionWritten = functions.firestore
       const snap = change.before;
       const lambda = ref => 
         ref.delete();
-      promises.concat(_updateUserElectionSubscriptions(snap, userId, lambda));
+      promises.push.apply(promises, _updateUserElectionSubscriptions(snap, userId, lambda));
     }
 
     if (change.after.exists) {
       const snap = change.after;
       const lambda = ref =>
         ref.set({'creationTime': admin.firestore.FieldValue.serverTimestamp()});
-      promises.concat(_updateUserElectionSubscriptions(snap, userId, lambda));
+      promises.push.apply(promises, _updateUserElectionSubscriptions(snap, userId, lambda));
     }
 
     return Promise.all(promises);
@@ -147,23 +147,27 @@ function _updateUserElectionSubscriptions(snap, userId, lambda) {
   const election = snap.data();    
   const lang = election.lang;
 
-  if (election.source === SOURCE_GOOGLE && election.election.id !== null) {
+  const promises = [];
+
+  if (election.election.id) {
     const ref = db
-      .collection('elections').doc(election.election.id)
+      .collection('elections').doc(String(election.election.id))
       .collection('users').doc(userId);
-    return lambda(ref);  
+    promises.push(lambda(ref));
   }
 
-  if ('contests' in election) {
-    return election.contests
+  if (election.contests) {
+    promises.push.apply(promises, election.contests
       .filter(contest => 'division' in contest)
       .map(contest => db
         .collection('divisions').doc(contest.division)
         .collection('langs').doc(lang)
         .collection('elections').doc(election.election.electionDay)
         .collection('users').doc(userId))
-      .map(lambda);
+      .map(lambda));
   }
+
+  return promises;
 }
 
 function _compileElectionFromVoterinfo(election, lang) {
@@ -247,7 +251,6 @@ function _compileElectionFromRepresentatives(
 
       const election = _mergeElections(
         electionFromVoterInfo, electionFromRepresentatives, supplement);
-      console.log(election);  
       return _getUpcomingElectionRef(db, userId).set(election);
     });
 }
@@ -267,6 +270,7 @@ function _mergeElections(electionFromVoterInfo, electionFromRepresentatives, sup
               _updateCandidateFavId(supplement.favIdMap, candidate);
               if (candidatesMap[candidate.favId]) {
                 Object.assign(candidate, candidatesMap[candidate.favId]);
+                contest.division = candidate.division;
               }
             });
           }
@@ -334,7 +338,8 @@ function _filterUpcomingElection(input, divisions) {
             division.division, 
              contest.id,
              candidate.id].join('|'));
-         });
+           candidate.division = division.division;  
+         });        
        }
 
        return contest
