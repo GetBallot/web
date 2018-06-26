@@ -35,6 +35,8 @@ exports.compileElectionFromVoterinfo = function(election, lang) {
     })
   }
 
+  election.votingLocations = _getMergedVotingLocations(election);
+
   return election;
 }
 
@@ -76,7 +78,7 @@ exports.compileElectionFromRepresentatives = function(db, data, lang, electionFr
         }
       })
 
-      const electionFromRepresentatives = _filterUpcomingElection(data.input, divisions);
+      const electionFromRepresentatives = _filterUpcomingElection(divisions);
       electionFromRepresentatives.lang = lang;
 
       return _mergeElections(
@@ -121,13 +123,6 @@ exports.updateUserElectionSubscriptions = function(db, snap, userId, lambda) {
   const lang = election.lang;
 
   const promises = [];
-
-  if (election.election.id) {
-    const ref = db
-      .collection('elections').doc(String(election.election.id))
-      .collection('users').doc(userId);
-    promises.push(lambda(ref));
-  }
 
   if (election.contests) {
     promises.push.apply(promises, election.contests
@@ -222,8 +217,8 @@ function _createFavIdToCandidateMap(electionFromRepresentatives) {
   return map;
 }
 
-function _filterUpcomingElection(input, divisions) {
-  const election = {input: input, source: SOURCE_BALLOT}
+function _filterUpcomingElection(divisions) {
+  const election = {source: SOURCE_BALLOT}
 
   // Find the earliest electionDay
   const upcoming = divisions.reduce((prev, curr) =>
@@ -282,6 +277,70 @@ function _getElectionPromise(db, lang, ocd, electionDay) {
       .orderBy('electionDay');
 
   return ref.limit(1).get();
+}
+
+function _getMergedVotingLocations(election) {
+  if (!election) {
+    return [];
+  }
+
+  const keys = [];
+  const map = new Map();
+
+  if (election.pollingStations) {
+    election.pollingStations.forEach(location => {
+      _addVotingLocation(keys, map, location, 'pollingStation');
+    });
+    delete election['pollingStations'];
+  }
+
+  if (election.dropOffLocations) {
+    election.dropOffLocations.forEach(location => {
+      _addVotingLocation(keys, map, location, 'dropOffLocation');
+    });
+    delete election['dropOffLocations'];
+  }
+
+  if (election.earlyVoteSites) {
+    election.earlyVoteSites.forEach(location => {
+      _addVotingLocation(keys, map, location, 'earlyVoteSite');
+    });
+    delete election['earlyVoteSites'];
+  }
+
+  return keys.map(key => map[key]);
+}
+
+function _addVotingLocation(keys, map, location, type) {
+  if (!location.address) {
+    return;
+  }
+  
+  const locationName = location.address.locationName;
+  const formattedAddress = _formatAddress(location.address);
+  const key = 
+    locationName ? locationName + ', ' + formattedAddress : formattedAddress;
+
+  if (!map[key]) {
+    keys.push(key);
+    map[key] = {
+      address: location.address,
+      formattedAddress: formattedAddress
+    }
+  }
+  map[key][type] = location;
+  delete map[key][type].address;
+}
+
+function _formatAddress(fields) {
+  var address = ['line1', 'line2', 'line3', 'city', 'state']
+    .map(key => fields[key])
+    .filter(s => s && s.trim().length > 0)
+    .join(', ')
+  if (fields['zip']) {
+    address += ' ' + fields['zip'];
+  }
+  return address;
 }
 
 function _today() {
