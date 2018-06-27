@@ -157,7 +157,7 @@ exports.summarizeArray = function(ref, context, itemsKey) {
         items.push(item);
       });
       const data = {};
-      data[itemsKey] = items;
+      data[itemsKey] = items.sort((a, b) => a.orderOnBallot - b.orderOnBallot);
       return collectionRef.parent.set(data, {merge: true});
     });
 }
