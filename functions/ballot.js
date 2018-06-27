@@ -287,11 +287,11 @@ function _getMergedVotingLocations(election) {
   const keys = [];
   const map = new Map();
 
-  if (election.pollingStations) {
-    election.pollingStations.forEach(location => {
-      _addVotingLocation(keys, map, location, 'pollingStation');
+  if (election.pollingLocations) {
+    election.pollingLocations.forEach(location => {
+      _addVotingLocation(keys, map, location, 'pollingLocation');
     });
-    delete election['pollingStations'];
+    delete election['pollingLocations'];
   }
 
   if (election.dropOffLocations) {
