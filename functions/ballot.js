@@ -163,13 +163,13 @@ exports.summarizeArray = function(ref, context, itemsKey) {
 }
 
 function _mergeElections(electionFromVoterInfo, electionFromRepresentatives, supplement) {
-  if (electionFromVoterInfo !== null) {
-    if (electionFromVoterInfo.contests === null) {
+  if (electionFromVoterInfo) {
+    if (!electionFromVoterInfo.contests) {
       if (electionFromRepresentatives.contests) {
         electionFromVoterInfo.contests = electionFromRepresentatives.contests;
       }
     } else {
-      if (supplement !== null && supplement.favIdMap) {
+      if (supplement && supplement.favIdMap) {
         const candidatesMap = _createFavIdToCandidateMap(electionFromRepresentatives);
         electionFromVoterInfo.contests.forEach(contest => {
           if (contest.candidates) {
@@ -245,7 +245,7 @@ function _filterUpcomingElection(divisions) {
             division.division, 
              contest.id,
              candidate.id].join('|'));
-           candidate.division = division.division;  
+           candidate.division = division.division; 
          });        
        }
 
