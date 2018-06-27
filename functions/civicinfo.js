@@ -22,7 +22,11 @@ exports.saveAddress = function(db, conv, address) {
 
 exports.fetchCivicInfo = function(db, userId, lang, address) {
   const results = {lang: lang};
-  return civicinfo.elections.voterInfoQuery({address: address})
+  const query = {address: address};
+  if (address === '1263 Pacific Ave, Kansas City, KS 66102, USA') {
+    query['electionId'] = 2000;
+  }
+  return civicinfo.elections.voterInfoQuery(query)
     .then(res => {
       results.voterinfo = res.data;
       return res;
