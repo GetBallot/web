@@ -66,7 +66,19 @@ exports.votingLocations = function(db, conv) {
     .then(snapshot => {
       const election = snapshot.exists ? snapshot.data() : null;
       _replyVotingLocations(conv, election);
-      return snapshot;
+      return election;
+    });
+}
+
+exports.contests = function(db, conv) {
+  return db
+    .collection('users').doc(conv.user.storage.uniqid)
+    .collection('elections').doc('upcoming')
+    .get()
+    .then(snapshot => {
+      const election = snapshot.exists ? snapshot.data() : null;
+      _replyContests(conv, election);
+      return election;
     });
 }
 
@@ -81,13 +93,26 @@ exports.formatAddressForSpeech = function(fields) {
 function _replyUpcomingElection(conv, election) {
   if (!election) {
     conv.ask(`Sorry, I'm still looking. Please try again in a few moments.`);
+    conv.ask(new Suggestions(['upcoming election']));
     return election;
   }  
   if (election.election && election.election.electionDay) {
     const name = election.election.name || 'an election';
-    conv.ask(`I found ${name} on ${_formatDate(election.election.electionDay)}. 
-      Say "voting location" to get more info.`);
-    conv.ask(new Suggestions(['voting location']));
+    var msg = `I found ${name} on ${_formatDate(election.election.electionDay)}.`;
+
+    const suggestions = [];
+    if (_hasVotingLocation(election)) {
+      suggestions.push('voting location');
+    }
+    if (_hasContests(election)) {
+      suggestions.push('contests');
+    }
+    if (suggestions.length > 0) {
+      conv.ask(msg + ` To get more info, say ${_joinWith(suggestions, ', or ')}.`);
+      conv.ask(new Suggestions(suggestions));
+    } else {
+      conv.close(msg);
+    }
   } else {
     conv.close(`Sorry, I couldn't find any elections`);
   }
@@ -95,9 +120,7 @@ function _replyUpcomingElection(conv, election) {
 }
 
 function _replyVotingLocations(conv, election) {
-  if (election && election.votingLocations && 
-      election.votingLocations.length > 0 &&
-      election.votingLocations[0].address) {
+  if (_hasVotingLocation(election)) {
     const location = election.votingLocations[0];
     const place = location.address.locationName || location.formattedAddress;
     conv.ask(`You can vote at ${place}.`);
@@ -107,9 +130,43 @@ function _replyVotingLocations(conv, election) {
   return election;
 }
 
+function _replyContests(conv, election) {
+  if (_hasContests(election)) {
+    if (election.contests.length === 1) {
+      conv.ask(`There is one contest: ${election.contests[0].name}`);
+    } else {
+      conv.ask(`There are ${election.contests.length} contests: 
+        ${_joinWith(election.contests.map(contest => contest.name), ', and ')}`);  
+    }
+  } else {
+    conv.close(`Sorry, I couldn't find any contests`);
+  }
+  return election;
+}
+
+
+function _hasVotingLocation(election) {
+  return election && election.votingLocations && 
+    election.votingLocations.length > 0 &&
+    election.votingLocations[0].address;
+}
+
+function _hasContests(election) {
+  return election && election.contests && 
+    election.contests.length > 0;
+}
+
 function _formatDate(dateStr) {
   const year = dateStr.substring(0, 4);
   const month = dateStr.substring(4, 6);
   const day = dateStr.substring(6, 8);
   return year + '-' + month + '-' + day;
+}
+
+function _joinWith(items, lastConnector) {
+  if (items.length > 1) {
+    return items.slice(0, -1).join(', ') + lastConnector + items.slice(-1);
+  } else {
+    return items.join(', ');
+  }
 }

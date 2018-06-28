@@ -15,14 +15,15 @@ const app = dialogflow();
 
 exports.dialogflowFirebaseFulfillment = functions.https.onRequest(app);
 
-app.intent('Default Welcome Intent', (conv) => {
+app.intent('welcome', (conv) => {
   if (!conv.user.storage.uniqid) {
     conv.user.storage.uniqid = uniqid('actions-');
   }
   conv.ask(new Place({
-    prompt: 'What is your registered voting address? To use your home address, say, "home".',
+    prompt: 'What is your registered voting address?',
     context: 'To get your ballot information',
   }));
+  conv.ask(new Suggestions(['home']));
 });
 
 app.intent('ask_for_place', (conv, input, place, status) => {
@@ -50,6 +51,10 @@ app.intent('election_info', (conv) => {
 
 app.intent('voting_locations', (conv) => {
   return civicinfo.votingLocations(admin.firestore(), conv);
+});
+
+app.intent('contests', (conv) => {
+  return civicinfo.contests(admin.firestore(), conv);
 });
 
 ///// Cloud functions
