@@ -58,7 +58,7 @@ exports.actionsAddressWritten = functions.firestore
   .document('users/{userId}/triggers/address')
   .onWrite((change, context) => {
     if (!change.after.exists) {
-      return;
+      return change;
     }
 
     const db = admin.firestore();
@@ -72,7 +72,7 @@ exports.userCivicInfoWritten = functions.firestore
   .document('users/{userId}/triggers/civicinfo')
   .onWrite((change, context) => {
     if (!change.after.exists) {
-      return;
+      return change;
     }
     const db = admin.firestore();
     const userId = context.params.userId;
@@ -136,16 +136,4 @@ exports.electionWritten = functions.firestore
 
         return Promise.all(promises);
       })
-  });
-
-exports.contestWritten = functions.firestore
-  .document('divisions/{ocd}/langs/{lang}/elections/{electionDay}/contests/{contestId}')
-  .onWrite((change, context) => {
-    return ballot.summarizeArray(change.after.ref, context, 'contests');
-  });
-
-exports.candidateWritten = functions.firestore
-  .document('divisions/{ocd}/langs/{lang}/elections/{electionDay}/contests/{contestId}/candidates/{candidateId}')
-  .onWrite((change, context) => {
-    return ballot.summarizeArray(change.after.ref, context, 'candidates');
   });
