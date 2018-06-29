@@ -36,7 +36,10 @@ exports.fetchCivicInfo = function(db, userId, input) {
       return Promise.resolve('No voter info');
     })
     .then(_ => {
-      return civicinfo.representatives.representativeInfoByAddress({address: input.address})
+      return civicinfo.representatives.representativeInfoByAddress({
+        address: input.address,
+        includeOffices: false
+      });
     })
     .then(res => {
       results.representatives = res.data;
