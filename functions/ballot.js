@@ -1,8 +1,10 @@
 const SOURCE_GOOGLE = 'civicinfo#voterInfoResponse';
 const SOURCE_BALLOT = 'getballot.com';
 
+const util = require('./util.js');
+
 exports.compileElectionFromVoterinfo = function(election, lang) {
-  election.lang = lang;
+  election.lang = util.getLang(lang);
   election.source = SOURCE_GOOGLE;
 
   election.election.electionDay
@@ -23,13 +25,13 @@ exports.compileElectionFromVoterinfo = function(election, lang) {
 
       if (contest.candidates) {
         contest.candidates.forEach((candidate) => {
-          candidate.favId = _sanitize(favIdPrefix + '|' + candidate.name);
+          candidate.favId = util.sanitize(favIdPrefix + '|' + candidate.name);
         });
       }
 
       if (contest.referendumBallotResponses) {
         contest.referendumBallotResponses.forEach((response) => {
-          candidate.favId = _sanitize(favIdPrefix + '|' + response);
+          candidate.favId = util.sanitize(favIdPrefix + '|' + response);
         });
       }
     })
@@ -42,10 +44,11 @@ exports.compileElectionFromVoterinfo = function(election, lang) {
 
 exports.compileElectionFromRepresentatives = function(db, data, lang, electionFromVoterInfo) {
   const electionDay = electionFromVoterInfo ? electionFromVoterInfo.election.electionDay : null;
+  const sanitizedLang = util.getLang(lang);
 
   const promises = [];
   for (var ocd in data.divisions) {
-    promises.push(_getElectionPromise(db, lang, ocd, electionDay));
+    promises.push(_getElectionPromise(db, sanitizedLang, ocd, electionDay));
   }
 
   const electionId = electionFromVoterInfo === null ? null :
@@ -79,7 +82,7 @@ exports.compileElectionFromRepresentatives = function(db, data, lang, electionFr
       })
 
       const electionFromRepresentatives = _filterUpcomingElection(divisions);
-      electionFromRepresentatives.lang = lang;
+      electionFromRepresentatives.lang = sanitizedLang;
 
       return _mergeElections(
         electionFromVoterInfo, electionFromRepresentatives, supplement);
@@ -132,7 +135,7 @@ exports.summarizeArray = function(ref, context, itemsKey) {
           parts.push(context.params.contestId);
         }
         parts.push(item.id);
-        item.canonicalId = _sanitize(parts.join('|'));
+        item.canonicalId = util.sanitize(parts.join('|'));
 
         items.push(item);
       });
@@ -220,7 +223,7 @@ function _filterUpcomingElection(divisions) {
 
        if ('candidates' in contest) {
          contest.candidates.map(candidate => {
-           candidate.favId = _sanitize([
+           candidate.favId = util.sanitize([
             upcoming.electionDay,
             division.division,
              contest.id,
@@ -243,17 +246,17 @@ function _filterUpcomingElection(divisions) {
 }
 
 function _getElectionPromise(db, lang, ocd, electionDay) {
-  const sanitizedOcd = _sanitize(ocd);
+  const sanitizedOcd = util.sanitize(ocd);
   const refPrefix = db
     .collection('divisions').doc(sanitizedOcd)
-    .collection('langs').doc(lang)
+    .collection('langs').doc(util.getLang(lang))
     .collection('elections')
 
   const ref = electionDay ?
     refPrefix
       .where('electionDay', '==', electionDay) :
     refPrefix
-      .where('electionDay', '>=', _today())
+      .where('electionDay', '>=', util.today())
       .orderBy('electionDay');
 
   return ref.limit(1).get();
@@ -297,7 +300,7 @@ function _addVotingLocation(keys, map, location, type) {
   }
 
   const locationName = location.address.locationName;
-  const formattedAddress = _formatAddress(location.address);
+  const formattedAddress = util.formatAddress(location.address);
   const key =
     locationName ? locationName + ', ' + formattedAddress : formattedAddress;
 
@@ -310,36 +313,4 @@ function _addVotingLocation(keys, map, location, type) {
   }
   map[key][type] = location;
   delete map[key][type].address;
-}
-
-function _formatAddress(fields) {
-  var address = ['line1', 'line2', 'line3', 'city', 'state']
-    .map(key => fields[key])
-    .filter(s => s && s.trim().length > 0)
-    .join(', ')
-  if (fields['zip']) {
-    address += ' ' + fields['zip'];
-  }
-  return address;
-}
-
-function _today() {
-  var today = new Date();
-  var dd = today.getDate();
-  var mm = today.getMonth() + 1;
-  var yyyy = today.getFullYear();
-
-  if (dd < 10) {
-    dd = '0' + dd
-  }
-
-  if (mm < 10) {
-    mm = '0' + mm
-  }
-
-  return yyyy + '' + mm + '' + dd;
-}
-
-function _sanitize(id) {
-  return id.split('/').join(',')
 }

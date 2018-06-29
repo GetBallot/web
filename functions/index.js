@@ -5,6 +5,7 @@ const functions = require('firebase-functions');
 const uniqid = require('uniqid');
 const ballot = require('./ballot.js');
 const civicinfo = require('./civicinfo.js');
+const util = require('./util.js');
 
 const admin = require('firebase-admin');
 admin.initializeApp();
@@ -68,9 +69,9 @@ exports.actionsAddressWritten = functions.firestore
 
     const db = admin.firestore();
     const userId = context.params.userId;
-    const data = change.after.data();
+    const after = change.after.data();
 
-    return civicinfo.fetchCivicInfo(db, userId, data.lang, data.address);
+    return civicinfo.fetchCivicInfo(db, userId, after);
 });
 
 exports.userCivicInfoWritten = functions.firestore
@@ -82,7 +83,7 @@ exports.userCivicInfoWritten = functions.firestore
     const db = admin.firestore();
     const userId = context.params.userId;
     const data = change.after.data();
-    const lang = data.lang;
+    const lang = util.getLang(data.lang);
 
     const electionFromVoterInfo = data.voterinfo === undefined ? null :
       ballot.compileElectionFromVoterinfo(data.voterinfo, lang);

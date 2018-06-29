@@ -4,6 +4,7 @@ const { Suggestions } = require('actions-on-google');
 const { google } = require('googleapis');
 const path = require('path');
 const nconf = require('nconf');
+const util = require('./util.js');
 
 nconf.argv().env().file(path.join(__dirname, 'config.json'));
 
@@ -13,7 +14,7 @@ const civicinfo = google.civicinfo({
 });
 
 exports.saveAddress = function(db, conv, address) {
-  const lang = conv.user.locale.split('-')[0];
+  const lang = util.getLang(conv.user.locale);
   return db
     .collection('users').doc(conv.user.storage.uniqid)
     .collection('triggers').doc('address')
@@ -21,7 +22,7 @@ exports.saveAddress = function(db, conv, address) {
 }
 
 exports.fetchCivicInfo = function(db, userId, input) {
-  const results = {lang: input.lang};
+  const results = {lang: util.getLang(input.lang)};
   const query = {address: input.address};
   if (input.address === '1263 Pacific Ave, Kansas City, KS 66102, USA') {
     query['electionId'] = 2000;
