@@ -13,17 +13,17 @@ const civicinfo = google.civicinfo({
 });
 
 exports.saveAddress = function(db, conv, address) {
-  const lang = conv.user.locale.split('-')[0];  
+  const lang = conv.user.locale.split('-')[0];
   return db
     .collection('users').doc(conv.user.storage.uniqid)
     .collection('triggers').doc('address')
     .set({address: address, lang: lang});
 }
 
-exports.fetchCivicInfo = function(db, userId, lang, address) {
-  const results = {lang: lang};
-  const query = {address: address};
-  if (address === '1263 Pacific Ave, Kansas City, KS 66102, USA') {
+exports.fetchCivicInfo = function(db, userId, input) {
+  const results = {lang: input.lang};
+  const query = {address: input.address};
+  if (input.address === '1263 Pacific Ave, Kansas City, KS 66102, USA') {
     query['electionId'] = 2000;
   }
   return civicinfo.elections.voterInfoQuery(query)
@@ -35,10 +35,13 @@ exports.fetchCivicInfo = function(db, userId, lang, address) {
       return Promise.resolve('No voter info');
     })
     .then(_ => {
-      return civicinfo.representatives.representativeInfoByAddress({address: address})
+      return civicinfo.representatives.representativeInfoByAddress({address: input.address})
     })
     .then(res => {
       results.representatives = res.data;
+      if (input.updateUpcomingElection) {
+        results.updateUpcomingElection = input.updateUpcomingElection;
+      }
       return db
         .collection('users').doc(userId)
         .collection('triggers').doc('civicinfo')
@@ -146,13 +149,13 @@ function _replyContests(conv, election) {
 
 
 function _hasVotingLocation(election) {
-  return election && election.votingLocations && 
+  return election && election.votingLocations &&
     election.votingLocations.length > 0 &&
     election.votingLocations[0].address;
 }
 
 function _hasContests(election) {
-  return election && election.contests && 
+  return election && election.contests &&
     election.contests.length > 0;
 }
 

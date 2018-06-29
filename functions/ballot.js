@@ -7,7 +7,7 @@ exports.compileElectionFromVoterinfo = function(election, lang) {
 
   election.election.electionDay
     = election.election.electionDay.split('-').join('');
-  
+
   if (election.contests) {
     election.contests.forEach((contest) => {
       const district = contest.district.name;
@@ -50,8 +50,8 @@ exports.compileElectionFromRepresentatives = function(db, data, lang, electionFr
 
   const electionId = electionFromVoterInfo === null ? null :
     electionFromVoterInfo.election.id;
-  
-  if (electionId !== null) {  
+
+  if (electionId !== null) {
     promises.push(db.collection('elections').doc(electionId).get());
   }
 
@@ -64,7 +64,7 @@ exports.compileElectionFromRepresentatives = function(db, data, lang, electionFr
           supplement = snapshot.data();
         }
       }
-            
+
       const divisions = [];
       divisionsSnap.forEach(electionsSnap => {
         if (!electionsSnap.empty) {
@@ -102,7 +102,7 @@ exports.copyElectionSupplement = function(db, election) {
 
               if (!('favIdMap' in update)) {
                 update.favIdMap = {};
-              }                    
+              }
               update.favIdMap[favId] = candidate.canonicalId;
             })
           }
@@ -111,31 +111,11 @@ exports.copyElectionSupplement = function(db, election) {
     })
   }
 
-  return Object.keys(updates).map(electionId => 
+  return Object.keys(updates).map(electionId =>
       db
         .collection('elections').doc(electionId)
         .set(updates[electionId], {merge: true})
     );
-}
-
-exports.updateUserElectionSubscriptions = function(db, snap, userId, lambda) {
-  const election = snap.data();    
-  const lang = election.lang;
-
-  const promises = [];
-
-  if (election.contests) {
-    promises.push.apply(promises, election.contests
-      .filter(contest => 'division' in contest)
-      .map(contest => db
-        .collection('divisions').doc(contest.division)
-        .collection('langs').doc(lang)
-        .collection('elections').doc(election.election.electionDay)
-        .collection('users').doc(userId))
-      .map(lambda));
-  }
-
-  return promises;
 }
 
 exports.summarizeArray = function(ref, context, itemsKey) {
@@ -147,7 +127,7 @@ exports.summarizeArray = function(ref, context, itemsKey) {
         const item = itemSnap.data();
         item.id = itemSnap.ref.id;
 
-        const parts = [context.params.electionDay, context.params.ocd];        
+        const parts = [context.params.electionDay, context.params.ocd];
         if (itemsKey === 'candidates') {
           parts.push(context.params.contestId);
         }
@@ -186,7 +166,7 @@ function _mergeElections(electionFromVoterInfo, electionFromRepresentatives, sup
     }
   }
 
-  return electionFromVoterInfo === null ? 
+  return electionFromVoterInfo === null ?
     electionFromRepresentatives : electionFromVoterInfo;
 }
 
@@ -237,16 +217,16 @@ function _filterUpcomingElection(divisions) {
     .sort((a, b) => String(a.division).localeCompare(b.division))
     .map(division => division.contests.map(contest => {
        contest.division = division.division;
-       
+
        if ('candidates' in contest) {
          contest.candidates.map(candidate => {
            candidate.favId = _sanitize([
-            upcoming.electionDay, 
-            division.division, 
+            upcoming.electionDay,
+            division.division,
              contest.id,
              candidate.id].join('|'));
-           candidate.division = division.division; 
-         });        
+           candidate.division = division.division;
+         });
        }
 
        return contest
@@ -268,10 +248,10 @@ function _getElectionPromise(db, lang, ocd, electionDay) {
     .collection('divisions').doc(sanitizedOcd)
     .collection('langs').doc(lang)
     .collection('elections')
-    
-  const ref = electionDay ? 
+
+  const ref = electionDay ?
     refPrefix
-      .where('electionDay', '==', electionDay) : 
+      .where('electionDay', '==', electionDay) :
     refPrefix
       .where('electionDay', '>=', _today())
       .orderBy('electionDay');
@@ -315,10 +295,10 @@ function _addVotingLocation(keys, map, location, type) {
   if (!location.address) {
     return;
   }
-  
+
   const locationName = location.address.locationName;
   const formattedAddress = _formatAddress(location.address);
-  const key = 
+  const key =
     locationName ? locationName + ', ' + formattedAddress : formattedAddress;
 
   if (!map[key]) {
