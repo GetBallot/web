@@ -24,7 +24,8 @@ exports.saveAddress = function(db, conv, address) {
 exports.fetchCivicInfo = function(db, userId, input) {
   const results = {lang: util.getLang(input.lang)};
   const query = {address: input.address};
-  if (input.address === '1263 Pacific Ave, Kansas City, KS 66102, USA') {
+  if (input.address.startsWith('1263 Pacific Ave') &&
+      input.address.includes('Kansas City, KS')) {
     query['electionId'] = 2000;
   }
   return civicinfo.elections.voterInfoQuery(query)
