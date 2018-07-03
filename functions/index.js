@@ -1,8 +1,7 @@
 'use strict';
 
-const { dialogflow, Place, Suggestions } = require('actions-on-google');
+const { dialogflow, Suggestions } = require('actions-on-google');
 const functions = require('firebase-functions');
-const uniqid = require('uniqid');
 const ballot = require('./ballot.js');
 const civicinfo = require('./civicinfo.js');
 const util = require('./util.js');
@@ -17,14 +16,8 @@ const app = dialogflow();
 exports.dialogflowFirebaseFulfillment = functions.https.onRequest(app);
 
 app.intent('welcome', (conv) => {
-  if (!conv.user.storage.uniqid) {
-    conv.user.storage.uniqid = uniqid('actions-');
-  }
-  conv.ask(new Place({
-    prompt: 'What is your registered voting address?',
-    context: 'To get your ballot information',
-  }));
-  conv.ask(new Suggestions(['home']));
+  const db = admin.firestore();
+  return civicinfo.welcome(db, conv);
 });
 
 app.intent('ask_for_place', (conv, input, place, status) => {

@@ -1,9 +1,11 @@
 'use strict';
 
-const { Suggestions } = require('actions-on-google');
+const { Place, Suggestions } = require('actions-on-google');
 const { google } = require('googleapis');
+const admin = require('firebase-admin');
 const path = require('path');
 const nconf = require('nconf');
+const uniqid = require('uniqid');
 const util = require('./util.js');
 
 nconf.argv().env().file(path.join(__dirname, 'config.json'));
@@ -19,6 +21,43 @@ exports.saveAddress = function(db, conv, address) {
     .collection('users').doc(conv.user.storage.uniqid)
     .collection('triggers').doc('address')
     .set({address: address, lang: lang});
+}
+
+exports.welcome = function(db, conv) {
+  if (conv.user.storage.uniqid) {
+    return db
+      .collection('users').doc(conv.user.storage.uniqid)
+      .collection('triggers').doc('address')
+      .get()
+      .then(snapshot => {
+        if (snapshot.exists) {
+          conv.ask(`Welcome back! Say "upcoming election" to get started.`);
+          conv.ask(new Suggestions(['upcoming election']));
+        } else {
+          _askForPlace(conv);
+        }
+        return snapshot;
+      })
+      .then(snapshot => {
+        if (snapshot.exists) {
+          const data = snapshot.data();
+          data['updateUpcomingElection'] = admin.firestore.FieldValue.serverTimestamp();
+          return snapshot.ref.set(data);
+        } else {
+          return snapshot;
+        }
+      });
+  } else {
+    conv.user.storage.uniqid = uniqid('actions-');
+    _askForPlace(conv);
+  }
+}
+
+function _askForPlace(conv) {
+  conv.ask(new Place({
+    prompt: 'What is your registered voting address?',
+    context: 'To get your ballot information',
+  }));
 }
 
 exports.fetchCivicInfo = function(db, userId, input) {
