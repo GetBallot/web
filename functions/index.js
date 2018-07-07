@@ -17,7 +17,16 @@ exports.dialogflowFirebaseFulfillment = functions.https.onRequest(app);
 
 app.intent('welcome', (conv) => {
   const db = admin.firestore();
-  return civicinfo.welcome(db, conv);
+  return civicinfo.fetchAddress(db, conv, false);
+});
+
+app.intent('change_address', (conv) => {
+  return civicinfo.changeAddress(conv);
+});
+
+app.intent('check_address', (conv) => {
+  const db = admin.firestore();
+  return civicinfo.fetchAddress(db, conv, true);
 });
 
 app.intent('ask_for_place', (conv, input, place, status) => {

@@ -23,7 +23,7 @@ exports.saveAddress = function(db, conv, address) {
     .set({address: address, lang: lang});
 }
 
-exports.welcome = function(db, conv) {
+exports.fetchAddress = function(db, conv, checkingAddress) {
   if (conv.user.storage.uniqid) {
     return db
       .collection('users').doc(conv.user.storage.uniqid)
@@ -31,10 +31,15 @@ exports.welcome = function(db, conv) {
       .get()
       .then(snapshot => {
         if (snapshot.exists) {
-          conv.ask(`Welcome back! Say "upcoming election" to get started.`);
-          conv.ask(new Suggestions(['upcoming election']));
+          if (checkingAddress) {
+            const data = snapshot.data();
+            conv.ask(`I have ${data.address}.`);
+          } else {
+            conv.ask(`Welcome back! Say "upcoming election" to get started.`);
+            conv.ask(new Suggestions(['upcoming election']));
+          }
         } else {
-          _askForPlace(conv);
+          _askForPlace(conv, checkingAddress);
         }
         return snapshot;
       })
@@ -49,11 +54,18 @@ exports.welcome = function(db, conv) {
       });
   } else {
     conv.user.storage.uniqid = uniqid('actions-');
-    _askForPlace(conv);
+    _askForPlace(conv, checkingAddress);
   }
 }
 
-function _askForPlace(conv) {
+exports.changeAddress = function(conv) {
+  _askForPlace(conv);
+}
+
+function _askForPlace(conv, checkingAddress) {
+  if (checkingAddress) {
+    conv.ask(`Sorry I do not know your address.`);
+  }
   conv.ask(new Place({
     prompt: 'What is your registered voting address?',
     context: 'To get your ballot information',
