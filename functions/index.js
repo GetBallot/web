@@ -9,7 +9,14 @@ const util = require('./util.js');
 const admin = require('firebase-admin');
 admin.initializeApp();
 
-const app = dialogflow();
+const path = require('path');
+const nconf = require('nconf');
+
+nconf.argv().env().file(path.join(__dirname, 'config.json'));
+
+const app = dialogflow({
+  clientId: nconf.get('clientId')
+});
 
 ///// Google Actions
 
