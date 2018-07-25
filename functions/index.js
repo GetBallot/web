@@ -102,7 +102,7 @@ exports.actionsAddressWritten = functions.firestore
     }
 
     const after = change.after.data();
-    
+
     return civicinfo.fetchCivicInfo(db, userId, after);
 });
 
@@ -121,6 +121,13 @@ exports.userCivicInfoWritten = functions.firestore
 
     const data = change.after.data();
     const lang = util.getLang(data.lang);
+
+    if (!change.after.exists) {
+      return db
+        .collection('users').doc(userId)
+        .collection('elections').doc('upcoming')
+        .delete();
+    }
 
     const electionFromVoterInfo = data.voterinfo === undefined ? null :
       ballot.compileElectionFromVoterinfo(data.voterinfo, lang);
