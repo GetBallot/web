@@ -12,7 +12,7 @@
   "dependencies": {
     "actions-on-google": "^2.2.0",
     "firebase-admin": "~5.12.1",
-    "firebase-functions": "^1.0.3",
+    "firebase-functions": "^2.0.0",
     "googleapis": "^32.0.0",
     "nconf": "^0.10.0",
     "uniqid": "^5.0.3"
