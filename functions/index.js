@@ -1,3 +1,4 @@
+
 'use strict';
 
 const { dialogflow, Suggestions } = require('actions-on-google');
@@ -5,6 +6,7 @@ const functions = require('firebase-functions');
 const ballot = require('./ballot.js');
 const civicinfo = require('./civicinfo.js');
 const util = require('./util.js');
+const constants = require('./constants.js');
 
 const admin = require('firebase-admin');
 admin.initializeApp();
@@ -23,48 +25,65 @@ const app = dialogflow({
 exports.dialogflowFirebaseFulfillment = functions.https.onRequest(app);
 
 app.intent('welcome', (conv) => {
-  const db = admin.firestore();
-  return civicinfo.fetchAddress(db, conv, false);
+  return civicinfo.fetchAddress(admin.firestore(), conv, false);
 });
 
-app.intent('change_address', (conv) => {
-  return civicinfo.changeAddress(conv);
-});
-
-app.intent('check_address', (conv) => {
-  const db = admin.firestore();
-  return civicinfo.fetchAddress(db, conv, true);
-});
-
-app.intent('ask_for_place', (conv, input, place, status) => {
-  // input is the raw input text
-  if (place) {
-    const db = admin.firestore();
-    civicinfo.saveAddress(db, conv, place.formattedAddress);
-    conv.ask(`<speak>
-    Got it.
-    <break time="1s"/>
-    ${place.formattedAddress}.
-    <break time="2s"/>
-    To get information about the next election, say "upcoming election".
-    </speak>`);
-    conv.ask(new Suggestions(['upcoming election']));
-  } else {
-    // Possibly do something with status
-    conv.close(`Sorry, I couldn't find where you are registered to vote`);
-  }
-});
-
-app.intent('election_info', (conv) => {
+app.intent('welcome - yes', (conv) => {
   return civicinfo.upcomingElection(admin.firestore(), conv);
 });
 
-app.intent('voting_locations', (conv) => {
+app.intent('change-address', (conv) => {
+  return civicinfo.changeAddress(conv);
+});
+
+app.intent('check-address', (conv) => {
+  return civicinfo.fetchAddress(admin.firestore(), conv, true);
+});
+
+app.intent('clear-address', (conv) => {
+  return civicinfo.clearAddress(admin.firestore(), conv, true);
+});
+
+app.intent('ask-for-place', (conv, input, place, status) => {
+  return civicinfo.askForPlace(admin.firestore(), conv, place);
+});
+
+app.intent('election-info', (conv) => {
+  return civicinfo.upcomingElection(admin.firestore(), conv);
+});
+app.intent('election-info - confirm', (conv) => {
+  return civicinfo.upcomingElection(admin.firestore(), conv);
+});
+app.intent('election-info - no', (conv) => {
+  return civicinfo.bye(conv);
+});
+
+app.intent('voting-location', (conv) => {
   return civicinfo.votingLocations(admin.firestore(), conv);
+});
+app.intent('voting-location - confirm', (conv) => {
+  return civicinfo.votingLocations(admin.firestore(), conv);
+});
+app.intent('voting-location - no', (conv) => {
+  return civicinfo.bye(conv);
 });
 
 app.intent('contests', (conv) => {
   return civicinfo.contests(admin.firestore(), conv);
+});
+app.intent('contests - confirm', (conv) => {
+  return civicinfo.contests(admin.firestore(), conv);
+});
+app.intent('contests - no', (conv) => {
+  return civicinfo.bye(conv);
+});
+
+app.intent('bye', (conv) => {
+  return civicinfo.bye(conv);
+});
+
+app.intent('help', (conv) => {
+  return civicinfo.help(admin.firestore(), conv);
 });
 
 ///// Cloud functions
@@ -72,25 +91,34 @@ app.intent('contests', (conv) => {
 exports.actionsAddressWritten = functions.firestore
   .document('users/{userId}/triggers/address')
   .onWrite((change, context) => {
-    if (!change.after.exists) {
-      return change;
-    }
-
     const db = admin.firestore();
     const userId = context.params.userId;
-    const after = change.after.data();
 
+    if (!change.after.exists) {
+      return db
+        .collection('users').doc(userId)
+        .collection('triggers').doc('civicinfo')
+        .delete();
+    }
+
+    const after = change.after.data();
+    
     return civicinfo.fetchCivicInfo(db, userId, after);
 });
 
 exports.userCivicInfoWritten = functions.firestore
   .document('users/{userId}/triggers/civicinfo')
   .onWrite((change, context) => {
-    if (!change.after.exists) {
-      return change;
-    }
     const db = admin.firestore();
     const userId = context.params.userId;
+
+    if (!change.after.exists) {
+      return db
+        .collection('users').doc(userId)
+        .collection('elections').doc('upcoming')
+        .delete();
+    }
+
     const data = change.after.data();
     const lang = util.getLang(data.lang);
 
