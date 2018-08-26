@@ -1,11 +1,12 @@
-const SOURCE_GOOGLE = 'civicinfo#voterInfoResponse';
-const SOURCE_BALLOT = 'getballot.com';
-
 const util = require('./util.js');
+const constants = require('./constants.js');
 
-exports.compileElectionFromVoterinfo = function(election, lang) {
+exports.compileElectionFromVoterinfo = function(election, address, lang) {
   election.lang = util.getLang(lang);
-  election.source = SOURCE_GOOGLE;
+  election.source = constants.SOURCE_GOOGLE;
+  if (address) {
+    election.address = address;
+  }
 
   election.election.electionDay
     = election.election.electionDay.split('-').join('');
@@ -42,32 +43,17 @@ exports.compileElectionFromVoterinfo = function(election, lang) {
   return election;
 }
 
-exports.compileElectionFromRepresentatives = function(db, data, lang, electionFromVoterInfo) {
-  const electionDay = electionFromVoterInfo ? electionFromVoterInfo.election.electionDay : null;
+exports.compileElectionFromRepresentatives = function(db, data, address, lang) {
   const sanitizedLang = util.getLang(lang);
+  const electionDay = null;
 
   const promises = [];
   for (var ocd in data.divisions) {
     promises.push(_getElectionPromise(db, sanitizedLang, ocd, electionDay));
   }
 
-  const electionId = electionFromVoterInfo === null ? null :
-    electionFromVoterInfo.election.id;
-
-  if (electionId !== null) {
-    promises.push(db.collection('elections').doc(electionId).get());
-  }
-
   return Promise.all(promises)
     .then(divisionsSnap => {
-      var supplement = null;
-      if (electionId !== null) {
-        const snapshot = divisionsSnap.pop();
-        if (snapshot.exists) {
-          supplement = snapshot.data();
-        }
-      }
-
       const divisions = [];
       divisionsSnap.forEach(electionsSnap => {
         if (!electionsSnap.empty) {
@@ -83,10 +69,81 @@ exports.compileElectionFromRepresentatives = function(db, data, lang, electionFr
 
       const electionFromRepresentatives = _filterUpcomingElection(divisions);
       electionFromRepresentatives.lang = sanitizedLang;
+      if (address) {
+        electionFromRepresentatives.address = address;
+      }
 
-      return _mergeElections(
-        electionFromVoterInfo, electionFromRepresentatives, supplement);
+      return electionFromRepresentatives;
     });
+}
+
+exports.mergeElectionFromRepresentatives = function(db, userId, electionFromRepresentatives) {
+ const results = {};
+ return db
+   .collection('users').doc(userId)
+   .collection('elections').doc('upcoming')
+   .get()
+   .then(snapshot => {
+     if (snapshot.exists) {
+       results.electionFromVoterInfo = snapshot.data();
+     }
+     const electionId = results.electionFromVoterInfo ?
+       electionFromVoterInfo.election.id : null;
+
+     if (electionId !== null) {
+       return db.collection('elections').doc(electionId).get();
+     } else {
+       return null;
+     }
+   })
+   .catch(_ => {
+     return null;
+   })
+   .then(snapshot => {
+     if (snapshot == null) {
+       return electionFromRepresentatives;
+     }
+     const supplement = snapshot.exists ? snapshot.data() : null;
+     return _mergeElections(
+       results.electionFromVoterInfo, electionFromRepresentatives, supplement);
+   })
+}
+
+exports.mergeElectionFromVoterInfo = function(db, userId, electionFromVoterInfo) {
+ const results = {};
+ return db
+   .collection('users').doc(userId)
+   .collection('elections').doc('fromRepresentatives')
+   .get()
+   .then(snapshot => {
+     if (snapshot.exists) {
+       results.electionFromRepresentatives = snapshot.data();
+     }
+     if (!results.electionFromRepresentatives.election) {
+       return null;
+     }
+
+     const electionId = electionFromVoterInfo && electionFromVoterInfo.election ?
+       electionFromVoterInfo.election.id : null;
+
+     if (electionId) {
+       return db.collection('elections').doc(electionId).get();
+     } else {
+       return null;
+     }
+   })
+   .catch(_ => {
+     return null;
+   })
+   .then(snapshot => {
+    if (!results.electionFromRepresentatives.election) {
+      return null;
+    }
+
+    const supplement = snapshot && snapshot.exists ? snapshot.data() : {};
+    return _mergeElections(
+       electionFromVoterInfo, results.electionFromRepresentatives, supplement);
+   })
 }
 
 exports.copyElectionSupplement = function(db, election) {
@@ -146,7 +203,9 @@ exports.summarizeArray = function(ref, context, itemsKey) {
 }
 
 function _mergeElections(electionFromVoterInfo, electionFromRepresentatives, supplement) {
-  if (electionFromVoterInfo) {
+  if (electionFromVoterInfo && electionFromRepresentatives &&
+      electionFromVoterInfo.election &&
+      electionFromVoterInfo.address === electionFromRepresentatives.address) {
     if (!electionFromVoterInfo.contests) {
       if (electionFromRepresentatives.contests) {
         electionFromVoterInfo.contests = electionFromRepresentatives.contests;
@@ -169,8 +228,8 @@ function _mergeElections(electionFromVoterInfo, electionFromRepresentatives, sup
     }
   }
 
-  return electionFromVoterInfo === null ?
-    electionFromRepresentatives : electionFromVoterInfo;
+  return electionFromVoterInfo && (electionFromVoterInfo.election || !electionFromRepresentatives)?
+    electionFromVoterInfo : electionFromRepresentatives;
 }
 
 function _updateCandidateFavId(favIdMap, candidate) {
@@ -201,7 +260,7 @@ function _createFavIdToCandidateMap(electionFromRepresentatives) {
 }
 
 function _filterUpcomingElection(divisions) {
-  const election = {source: SOURCE_BALLOT}
+  const election = {source: constants.SOURCE_BALLOT}
 
   // Find the earliest electionDay
   const upcoming = divisions.reduce((prev, curr) =>

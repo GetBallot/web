@@ -85,6 +85,7 @@ exports.changeAddress = function(conv) {
 
 function _saveAddress(db, conv, address) {
   const lang = util.getLang(conv.user.locale);
+  conv.user.storage.address = address;
   return db
     .collection('users').doc(conv.user.storage.uniqid)
     .collection('triggers').doc('address')
@@ -102,7 +103,7 @@ function _askForPlace(conv, checkingAddress) {
 }
 
 exports.fetchCivicInfo = function(db, userId, input) {
-  const results = {lang: util.getLang(input.lang)};
+  const results = {lang: util.getLang(input.lang), address: input.address};
   const query = {address: input.address};
   if (input.address.startsWith('1263 Pacific Ave') &&
       input.address.includes('Kansas City, KS')) {
@@ -111,10 +112,27 @@ exports.fetchCivicInfo = function(db, userId, input) {
   return civicinfo.elections.voterInfoQuery(query)
     .then(res => {
       results.voterinfo = res.data;
-      return res;
+      return db
+        .collection('users').doc(userId)
+        .collection('triggers').doc('voterinfo')
+        .set(results);
     })
     .catch(_ => {
-      return Promise.resolve('No voter info');
+      const election = {
+        lang: results.lang,
+        address: results.address,
+        source: constants.SOURCE_GOOGLE
+      };
+      const promises = [];
+      promises.push(db
+        .collection('users').doc(userId)
+        .collection('elections').doc('fromVoterInfo')
+        .set(election));
+      promises.push(db
+        .collection('users').doc(userId)
+        .collection('triggers').doc('voterinfo')
+        .delete());
+      return Promise.all(promises);
     })
     .then(_ => {
       return civicinfo.representatives.representativeInfoByAddress({
@@ -196,11 +214,11 @@ exports.formatAddressForSpeech = function(fields) {
 
 function _replyUpcomingElection(conv, election) {
   if (!election) {
-    conv.ask(`Sorry, I'm still looking. 
+    conv.ask(`Sorry, I'm still looking.
       Please try again by saying 'upcoming election' in a few moments.`);
     conv.ask(new Suggestions(['upcoming election']));
     return election;
-  }  
+  }
   if (election.election && election.election.electionDay) {
     const name = election.election.name || 'an election';
     const msg = `I found ${name} on ${_formatDate(election.election.electionDay)}.`;
@@ -230,8 +248,8 @@ function _replyContests(conv, election) {
     if (election.contests.length === 1) {
       msg = `There is one contest: ${election.contests[0].name}.`;
     } else {
-      msg = `There are ${election.contests.length} contests: 
-        ${_joinWith(election.contests.map(contest => contest.name), ', and ')}`;  
+      msg = `There are ${election.contests.length} contests:
+        ${_joinWith(election.contests.map(contest => contest.name), ', and ')}`;
     }
   }
 
@@ -264,7 +282,7 @@ function _ask(conv, election, msg, currentCmd) {
     ${msg}
     <break time="1s"/>
     ${suffix}
-    </speak>`); 
+    </speak>`);
     conv.ask(new Suggestions(suggestions));
   } else {
     conv.close(`${msg}. Don't forget to vote!`);

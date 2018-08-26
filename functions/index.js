@@ -95,16 +95,55 @@ exports.actionsAddressWritten = functions.firestore
     const userId = context.params.userId;
 
     if (!change.after.exists) {
-      return db
+      const promises = [];
+      promises.push(db
         .collection('users').doc(userId)
         .collection('triggers').doc('civicinfo')
-        .delete();
+        .delete());
+      promises.push(db
+        .collection('users').doc(userId)
+        .collection('triggers').doc('voterinfo')
+        .delete());
+      return Promise.all(promises);
     }
 
     const after = change.after.data();
-
     return civicinfo.fetchCivicInfo(db, userId, after);
 });
+
+exports.userVoterInfoWritten = functions.firestore
+  .document('users/{userId}/triggers/voterinfo')
+  .onWrite((change, context) => {
+    const db = admin.firestore();
+    const userId = context.params.userId;
+
+    if (!change.after.exists) {
+      return change;
+    }
+
+    const data = change.after.data();
+    const lang = util.getLang(data.lang);
+
+    const electionFromVoterInfo = data && data.voterinfo ?
+      ballot.compileElectionFromVoterinfo(data.voterinfo, data.address, lang) : null;
+
+    if (electionFromVoterInfo) {
+      const promises = [];
+      if (electionFromVoterInfo.election) {
+        promises.push(db
+          .collection('users').doc(userId)
+          .collection('elections').doc('upcoming')
+          .set(electionFromVoterInfo));
+      }
+      promises.push(db
+        .collection('users').doc(userId)
+        .collection('elections').doc('fromVoterInfo')
+        .set(electionFromVoterInfo));
+      return Promise.all(promises);
+    } else {
+      return change;
+    }
+  });
 
 exports.userCivicInfoWritten = functions.firestore
   .document('users/{userId}/triggers/civicinfo')
@@ -115,29 +154,53 @@ exports.userCivicInfoWritten = functions.firestore
     if (!change.after.exists) {
       return db
         .collection('users').doc(userId)
-        .collection('elections').doc('upcoming')
+        .collection('elections').doc('fromRepresentatives')
         .delete();
     }
 
     const data = change.after.data();
     const lang = util.getLang(data.lang);
 
-    if (!change.after.exists) {
-      return db
-        .collection('users').doc(userId)
-        .collection('elections').doc('upcoming')
-        .delete();
-    }
+    const electionFromRepresentatives =
+      ballot.compileElectionFromRepresentatives(db, data.representatives, data.address, lang);
 
-    const electionFromVoterInfo = data.voterinfo === undefined ? null :
-      ballot.compileElectionFromVoterinfo(data.voterinfo, lang);
-
-    return ballot.compileElectionFromRepresentatives(
-      db, data.representatives, lang, electionFromVoterInfo)
+    return ballot.mergeElectionFromRepresentatives(db, userId, electionFromRepresentatives)
       .then(election => {
-        return db
+        const promises = [];
+        if (election.election) {
+          promises.push(db
+            .collection('users').doc(userId)
+            .collection('elections').doc('upcoming')
+            .set(election));
+        }
+        promises.push(db
           .collection('users').doc(userId)
-          .collection('elections').doc('upcoming')
-          .set(election);
-      })
+          .collection('elections').doc('fromRepresentatives')
+          .set(election));
+        return Promise.all(promises);
+      });
   });
+
+  exports.userElectionFromVoterInfoWritten = functions.firestore
+    .document('users/{userId}/elections/fromVoterInfo')
+    .onWrite((change, context) => {
+     if (!change.after.exists) {
+       return change;
+     }
+
+      const db = admin.firestore();
+      const userId = context.params.userId;
+      const electionFromVoterInfo = change.after.data();
+
+      return ballot.mergeElectionFromVoterInfo(db, userId, electionFromVoterInfo)
+        .then(election => {
+          if (election && election.election) {
+            return db
+              .collection('users').doc(userId)
+              .collection('elections').doc('upcoming')
+              .set(election);
+          } else {
+            return election;
+          }
+        });
+    });
