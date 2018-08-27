@@ -78,49 +78,41 @@ exports.compileElectionFromRepresentatives = function(db, data, address, lang) {
 }
 
 exports.mergeElectionFromRepresentatives = function(db, userId, electionFromRepresentatives) {
- const results = {};
+ var electionFromVoterInfo = null;
  return db
    .collection('users').doc(userId)
-   .collection('elections').doc('upcoming')
+   .collection('elections').doc('fromVoterInfo')
    .get()
    .then(snapshot => {
      if (snapshot.exists) {
-       results.electionFromVoterInfo = snapshot.data();
+       electionFromVoterInfo = snapshot.data();
      }
-     const electionId = results.electionFromVoterInfo ?
+     const electionId = electionFromVoterInfo && electionFromVoterInfo.election ?
        electionFromVoterInfo.election.id : null;
 
-     if (electionId !== null) {
+     if (electionId) {
        return db.collection('elections').doc(electionId).get();
      } else {
-       return null;
+       return Promise.resolve(null);
      }
-   })
-   .catch(_ => {
-     return null;
    })
    .then(snapshot => {
-     if (snapshot == null) {
-       return electionFromRepresentatives;
-     }
-     const supplement = snapshot.exists ? snapshot.data() : null;
+     const supplement = snapshot && snapshot.exists ? snapshot.data() : null;
      return _mergeElections(
-       results.electionFromVoterInfo, electionFromRepresentatives, supplement);
+       electionFromVoterInfo, electionFromRepresentatives, supplement);
    })
 }
 
 exports.mergeElectionFromVoterInfo = function(db, userId, electionFromVoterInfo) {
- const results = {};
+ var electionFromRepresentatives = null;
  return db
    .collection('users').doc(userId)
    .collection('elections').doc('fromRepresentatives')
    .get()
    .then(snapshot => {
-     if (snapshot.exists) {
-       results.electionFromRepresentatives = snapshot.data();
-     }
-     if (!results.electionFromRepresentatives.election) {
-       return null;
+     if (snapshot.exists &&
+         electionFromVoterInfo.address === snapshot.data().address) {
+       electionFromRepresentatives = snapshot.data();
      }
 
      const electionId = electionFromVoterInfo && electionFromVoterInfo.election ?
@@ -129,20 +121,16 @@ exports.mergeElectionFromVoterInfo = function(db, userId, electionFromVoterInfo)
      if (electionId) {
        return db.collection('elections').doc(electionId).get();
      } else {
-       return null;
+       return Promise.resolve(null);
      }
    })
    .catch(_ => {
-     return null;
+     return Promise.resolve(null);
    })
    .then(snapshot => {
-    if (!results.electionFromRepresentatives.election) {
-      return null;
-    }
-
-    const supplement = snapshot && snapshot.exists ? snapshot.data() : {};
-    return _mergeElections(
-       electionFromVoterInfo, results.electionFromRepresentatives, supplement);
+     const supplement = snapshot && snapshot.exists ? snapshot.data() : {};
+     return _mergeElections(
+       electionFromVoterInfo, electionFromRepresentatives, supplement);
    })
 }
 
@@ -203,33 +191,39 @@ exports.summarizeArray = function(ref, context, itemsKey) {
 }
 
 function _mergeElections(electionFromVoterInfo, electionFromRepresentatives, supplement) {
-  if (electionFromVoterInfo && electionFromRepresentatives &&
-      electionFromVoterInfo.election &&
-      electionFromVoterInfo.address === electionFromRepresentatives.address) {
-    if (!electionFromVoterInfo.contests) {
-      if (electionFromRepresentatives.contests) {
-        electionFromVoterInfo.contests = electionFromRepresentatives.contests;
-      }
-    } else {
-      if (supplement && supplement.favIdMap) {
-        const candidatesMap = _createFavIdToCandidateMap(electionFromRepresentatives);
-        electionFromVoterInfo.contests.forEach(contest => {
-          if (contest.candidates) {
-            contest.candidates.forEach(candidate => {
-              _updateCandidateFavId(supplement.favIdMap, candidate);
-              if (candidatesMap[candidate.favId]) {
-                Object.assign(candidate, candidatesMap[candidate.favId]);
+  if (electionFromVoterInfo) {
+    if (electionFromRepresentatives &&
+        electionFromVoterInfo.address === electionFromRepresentatives.address) {
+      if (!electionFromVoterInfo.contests) {  
+        if (electionFromRepresentatives.contests) {
+          electionFromVoterInfo.contests = electionFromRepresentatives.contests;
+        }
+      } else {
+        if (supplement && supplement.favIdMap) {
+          const candidatesMap = _createFavIdToCandidateMap(electionFromRepresentatives);
+          electionFromVoterInfo.contests.forEach(contest => {
+            if (contest.candidates) {
+              contest.candidates.forEach(candidate => {
+                _updateCandidateFavId(supplement.favIdMap, candidate);
+                if (candidatesMap[candidate.favId]) {
+                  Object.assign(candidate, candidatesMap[candidate.favId]);
                 contest.division = candidate.division;
-              }
-            });
-          }
-        });
-      }
+                }
+              });
+            }
+          });
+        }
+      }  
+    }
+    if (electionFromVoterInfo.election ||
+        (electionFromRepresentatives && 
+         electionFromVoterInfo.address === electionFromRepresentatives.address && 
+         !electionFromRepresentatives.election)) {
+      return electionFromVoterInfo;
     }
   }
 
-  return electionFromVoterInfo && (electionFromVoterInfo.election || !electionFromRepresentatives)?
-    electionFromVoterInfo : electionFromRepresentatives;
+  return electionFromRepresentatives;
 }
 
 function _updateCandidateFavId(favIdMap, candidate) {
@@ -291,7 +285,7 @@ function _filterUpcomingElection(divisions) {
          });
        }
 
-       return contest
+       return contest;
     }))
     .reduce((acc, val) => acc.concat(val), []);
 

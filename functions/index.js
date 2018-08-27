@@ -108,7 +108,11 @@ exports.actionsAddressWritten = functions.firestore
     }
 
     const after = change.after.data();
-    return civicinfo.fetchCivicInfo(db, userId, after);
+    return db
+      .collection('users').doc(userId)
+      .collection('elections').doc('upcoming')
+      .delete()
+      .then(_ => civicinfo.fetchCivicInfo(db, userId, after));
 });
 
 exports.userVoterInfoWritten = functions.firestore
@@ -167,7 +171,7 @@ exports.userCivicInfoWritten = functions.firestore
     return ballot.mergeElectionFromRepresentatives(db, userId, electionFromRepresentatives)
       .then(election => {
         const promises = [];
-        if (election.election) {
+        if (election.election || election.source === constants.SOURCE_BALLOT) {
           promises.push(db
             .collection('users').doc(userId)
             .collection('elections').doc('upcoming')
@@ -184,9 +188,9 @@ exports.userCivicInfoWritten = functions.firestore
   exports.userElectionFromVoterInfoWritten = functions.firestore
     .document('users/{userId}/elections/fromVoterInfo')
     .onWrite((change, context) => {
-     if (!change.after.exists) {
-       return change;
-     }
+      if (!change.after.exists) {
+        return change;
+      }
 
       const db = admin.firestore();
       const userId = context.params.userId;
@@ -201,6 +205,6 @@ exports.userCivicInfoWritten = functions.firestore
               .set(election);
           } else {
             return election;
-          }
+          }    
         });
     });
