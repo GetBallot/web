@@ -190,35 +190,37 @@ exports.summarizeArray = function(ref, context, itemsKey) {
     });
 }
 
+exports.mergeElections = function(electionFromVoterInfo, electionFromRepresentatives, supplement) {
+  return _mergeElections(electionFromVoterInfo, electionFromRepresentatives, supplement);
+}
+
 function _mergeElections(electionFromVoterInfo, electionFromRepresentatives, supplement) {
   if (electionFromVoterInfo) {
-    if (electionFromRepresentatives &&
-        electionFromVoterInfo.address === electionFromRepresentatives.address) {
-      if (!electionFromVoterInfo.contests) {  
-        if (electionFromRepresentatives.contests) {
-          electionFromVoterInfo.contests = electionFromRepresentatives.contests;
-        }
-      } else {
-        if (supplement && supplement.favIdMap) {
-          const candidatesMap = _createFavIdToCandidateMap(electionFromRepresentatives);
-          electionFromVoterInfo.contests.forEach(contest => {
-            if (contest.candidates) {
-              contest.candidates.forEach(candidate => {
-                _updateCandidateFavId(supplement.favIdMap, candidate);
-                if (candidatesMap[candidate.favId]) {
-                  Object.assign(candidate, candidatesMap[candidate.favId]);
-                contest.division = candidate.division;
-                }
-              });
+    if (!electionFromVoterInfo.contests &&
+        electionFromRepresentatives &&
+        electionFromVoterInfo.address === electionFromRepresentatives.address &&
+        electionFromRepresentatives.contests) {
+      electionFromVoterInfo.contests = electionFromRepresentatives.contests;
+    }
+    if (electionFromVoterInfo.contests && supplement && supplement.favIdMap) {
+      const candidatesMap = _createFavIdToCandidateMap(
+        electionFromVoterInfo, electionFromRepresentatives);
+      electionFromVoterInfo.contests.forEach(contest => {
+        if (contest.candidates) {
+          contest.candidates.forEach(candidate => {
+            _updateCandidateFavId(supplement.favIdMap, candidate);
+            if (candidatesMap[candidate.favId]) {
+              Object.assign(candidate, candidatesMap[candidate.favId]);
+              contest.division = candidate.division;
             }
           });
         }
-      }  
+      });
     }
     if (electionFromVoterInfo.election ||
-        (electionFromRepresentatives && 
-         electionFromVoterInfo.address === electionFromRepresentatives.address && 
-         !electionFromRepresentatives.election)) {
+        !electionFromRepresentatives ||
+        (electionFromVoterInfo.address === electionFromRepresentatives.address &&
+        !electionFromRepresentatives.election)) {
       return electionFromVoterInfo;
     }
   }
@@ -239,9 +241,11 @@ function _updateCandidateFavId(favIdMap, candidate) {
   }
 }
 
-function _createFavIdToCandidateMap(electionFromRepresentatives) {
+function _createFavIdToCandidateMap(electionFromVoterInfo, electionFromRepresentatives) {
   const map = {};
-  if (electionFromRepresentatives.contests) {
+  if (electionFromRepresentatives &&
+      electionFromVoterInfo.address === electionFromRepresentatives.address &&
+      electionFromRepresentatives.contests) {
     electionFromRepresentatives.contests.forEach(contest => {
       if (contest.candidates) {
         contest.candidates.forEach(candidate => {
