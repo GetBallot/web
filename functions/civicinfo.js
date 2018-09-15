@@ -109,38 +109,37 @@ exports.fetchCivicInfo = function(db, userId, input) {
       input.address.includes('Kansas City, KS')) {
     query['electionId'] = 2000;
   }
-  return civicinfo.elections.voterInfoQuery(query)
-    .then(res => {
-      results.voterinfo = res.data;
-      return db
-        .collection('users').doc(userId)
-        .collection('triggers').doc('voterinfo')
-        .set(results);
-    })
-    .catch(_ => {
-      const election = {
-        lang: results.lang,
-        address: results.address,
-        source: constants.SOURCE_GOOGLE
-      };
-      const promises = [];
-      promises.push(db
-        .collection('users').doc(userId)
-        .collection('elections').doc('fromVoterInfo')
-        .set(election));
-      promises.push(db
-        .collection('users').doc(userId)
-        .collection('triggers').doc('voterinfo')
-        .delete());
-      return Promise.all(promises);
-    })
-    .then(_ => {
-      return civicinfo.representatives.representativeInfoByAddress({
-        address: input.address,
-        includeOffices: false
-      });
-    })
-    .then(res => {
+
+  return Promise.all([
+    civicinfo.elections.voterInfoQuery(query)
+      .then(res => {
+       results.voterinfo = res.data;
+       return db
+         .collection('users').doc(userId)
+         .collection('triggers').doc('voterinfo')
+         .set(results);
+     })
+      .catch(_ => {
+        const election = {
+          lang: results.lang,
+          address: results.address,
+          source: constants.SOURCE_GOOGLE
+        };
+        const promises = [];
+        promises.push(db
+          .collection('users').doc(userId)
+          .collection('elections').doc('fromVoterInfo')
+          .set(election));
+        promises.push(db
+          .collection('users').doc(userId)
+          .collection('triggers').doc('voterinfo')
+          .delete());
+        return Promise.all(promises);
+    }),
+    civicinfo.representatives.representativeInfoByAddress({
+      address: input.address,
+      includeOffices: false
+    }).then(res => {
       results.representatives = res.data;
       if (input.updateUpcomingElection) {
         results.updateUpcomingElection = input.updateUpcomingElection;
@@ -149,7 +148,8 @@ exports.fetchCivicInfo = function(db, userId, input) {
         .collection('users').doc(userId)
         .collection('triggers').doc('civicinfo')
         .set(results);
-    });
+    })
+  ]);
 }
 
 exports.upcomingElection = function(db, conv) {
