@@ -23,7 +23,7 @@ exports.today = function() {
     mm = '0' + mm
   }
 
-  return yyyy + '' + mm + '' + dd;
+  return `${yyyy}${mm}${dd}`;
 }
 
 exports.sanitize = function(id) {

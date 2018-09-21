@@ -279,7 +279,7 @@ function _filterUpcomingElection(divisions) {
        contest.division = division.division;
 
        if ('candidates' in contest) {
-         contest.candidates.map(candidate => {
+         contest.candidates.forEach(candidate => {
            candidate.favId = util.sanitize([
             upcoming.electionDay,
             division.division,
