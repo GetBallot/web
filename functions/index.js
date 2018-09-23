@@ -28,6 +28,10 @@ const app = dialogflow({
 
 exports.dialogflowFirebaseFulfillment = functions.https.onRequest(app);
 
+app.intent('fallback', (conv, params) => {
+  return civicinfo.fallback(db, conv, params);
+});
+
 app.intent('welcome', (conv) => {
   civicinfo.saveVersion(conv);
   return civicinfo.fetchAddress(db, conv, false);
@@ -59,8 +63,8 @@ app.intent('election-info', (conv) => {
 app.intent('election-info - confirm', (conv) => {
   return civicinfo.upcomingElection(db, conv);
 });
-app.intent('election-info - no', (conv) => {
-  return civicinfo.bye(conv);
+app.intent('election-info - contest', (conv, params) => {
+  return civicinfo.contest(db, conv, params);
 });
 
 app.intent('voting-location', (conv) => {
@@ -82,8 +86,43 @@ app.intent('contests - confirm', (conv) => {
 app.intent('contests - no', (conv) => {
   return civicinfo.bye(conv);
 });
+app.intent('contests-list', (conv) => {
+  return civicinfo.contestsAll(db, conv);
+});
+app.intent('contests - all', (conv) => {
+  return civicinfo.contestsAll(db, conv);
+});
+
+app.intent('contest', (conv, params) => {
+  return civicinfo.contest(db, conv, params);
+});
+app.intent('contest - which', (conv, params) => {
+  return civicinfo.contestWhich(db, conv, params);
+});
+
+app.intent('candidate', (conv, params) => {
+  return civicinfo.candidate(db, conv, params);
+});
+app.intent('candidate - in contest', (conv, params) => {
+  return civicinfo.candidateInContest(db, conv, params);
+});
+app.intent('candidate - in contest - fallback', (conv, params) => {
+  return civicinfo.candidateInContest(db, conv, params);
+});
+app.intent('candidate - in contest - none', (conv) => {
+  return civicinfo.bye(conv);
+});
+app.intent('candidate - one other', (conv, params) => {
+  return civicinfo.candidateOthersOne(db, conv, params);
+});
+app.intent('candidate - one other - no', (conv) => {
+  return civicinfo.bye(conv);
+});
 
 app.intent('bye', (conv) => {
+  return civicinfo.bye(conv);
+});
+app.intent('actions.intent.CANCEL', (conv) => {
   return civicinfo.bye(conv);
 });
 
