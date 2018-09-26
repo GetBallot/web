@@ -11,6 +11,10 @@ const constants = require('./constants.js');
 const admin = require('firebase-admin');
 admin.initializeApp();
 
+const db = admin.firestore();
+const settings = { timestampsInSnapshots: true };
+db.settings(settings);
+
 const path = require('path');
 const nconf = require('nconf');
 
@@ -25,11 +29,11 @@ const app = dialogflow({
 exports.dialogflowFirebaseFulfillment = functions.https.onRequest(app);
 
 app.intent('welcome', (conv) => {
-  return civicinfo.fetchAddress(admin.firestore(), conv, false);
+  return civicinfo.fetchAddress(db, conv, false);
 });
 
 app.intent('welcome - yes', (conv) => {
-  return civicinfo.upcomingElection(admin.firestore(), conv);
+  return civicinfo.upcomingElection(db, conv);
 });
 
 app.intent('change-address', (conv) => {
@@ -37,42 +41,42 @@ app.intent('change-address', (conv) => {
 });
 
 app.intent('check-address', (conv) => {
-  return civicinfo.fetchAddress(admin.firestore(), conv, true);
+  return civicinfo.fetchAddress(db, conv, true);
 });
 
 app.intent('clear-address', (conv) => {
-  return civicinfo.clearAddress(admin.firestore(), conv, true);
+  return civicinfo.clearAddress(db, conv, true);
 });
 
 app.intent('ask-for-place', (conv, input, place, status) => {
-  return civicinfo.askForPlace(admin.firestore(), conv, place);
+  return civicinfo.askForPlace(db, conv, place);
 });
 
 app.intent('election-info', (conv) => {
-  return civicinfo.upcomingElection(admin.firestore(), conv);
+  return civicinfo.upcomingElection(db, conv);
 });
 app.intent('election-info - confirm', (conv) => {
-  return civicinfo.upcomingElection(admin.firestore(), conv);
+  return civicinfo.upcomingElection(db, conv);
 });
 app.intent('election-info - no', (conv) => {
   return civicinfo.bye(conv);
 });
 
 app.intent('voting-location', (conv) => {
-  return civicinfo.votingLocations(admin.firestore(), conv);
+  return civicinfo.votingLocations(db, conv);
 });
 app.intent('voting-location - confirm', (conv) => {
-  return civicinfo.votingLocations(admin.firestore(), conv);
+  return civicinfo.votingLocations(db, conv);
 });
 app.intent('voting-location - no', (conv) => {
   return civicinfo.bye(conv);
 });
 
 app.intent('contests', (conv) => {
-  return civicinfo.contests(admin.firestore(), conv);
+  return civicinfo.contests(db, conv);
 });
 app.intent('contests - confirm', (conv) => {
-  return civicinfo.contests(admin.firestore(), conv);
+  return civicinfo.contests(db, conv);
 });
 app.intent('contests - no', (conv) => {
   return civicinfo.bye(conv);
@@ -83,7 +87,7 @@ app.intent('bye', (conv) => {
 });
 
 app.intent('help', (conv) => {
-  return civicinfo.help(admin.firestore(), conv);
+  return civicinfo.help(db, conv);
 });
 
 ///// Cloud functions
@@ -91,7 +95,6 @@ app.intent('help', (conv) => {
 exports.actionsAddressWritten = functions.firestore
   .document('users/{userId}/triggers/address')
   .onWrite((change, context) => {
-    const db = admin.firestore();
     const userId = context.params.userId;
 
     if (!change.after.exists) {
@@ -118,7 +121,6 @@ exports.actionsAddressWritten = functions.firestore
 exports.userVoterInfoWritten = functions.firestore
   .document('users/{userId}/triggers/voterinfo')
   .onWrite((change, context) => {
-    const db = admin.firestore();
     const userId = context.params.userId;
 
     if (!change.after.exists) {
@@ -152,7 +154,6 @@ exports.userVoterInfoWritten = functions.firestore
 exports.userCivicInfoWritten = functions.firestore
   .document('users/{userId}/triggers/civicinfo')
   .onWrite((change, context) => {
-    const db = admin.firestore();
     const userId = context.params.userId;
 
     if (!change.after.exists) {
@@ -192,7 +193,6 @@ exports.userCivicInfoWritten = functions.firestore
         return change;
       }
 
-      const db = admin.firestore();
       const userId = context.params.userId;
       const electionFromVoterInfo = change.after.data();
 
@@ -205,6 +205,6 @@ exports.userCivicInfoWritten = functions.firestore
               .set(election);
           } else {
             return election;
-          }    
+          }
         });
     });

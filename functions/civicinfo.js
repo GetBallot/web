@@ -66,12 +66,17 @@ exports.fetchAddress = function(db, conv, checkingAddress) {
       })
       .then(snapshot => {
         if (snapshot.exists) {
-          const data = snapshot.data();
-          data['updateUpcomingElection'] = admin.firestore.FieldValue.serverTimestamp();
-          return snapshot.ref.set(data);
-        } else {
-          return snapshot;
+          const modifiedAt = snapshot.get('updateUpcomingElection');
+          const now = new Date();
+          // Update upcoming election if older than 12 hours
+          const shouldUpdate = modifiedAt ? now - modifiedAt.toDate() > 43200000 : true;
+          if (shouldUpdate) {
+            const data = snapshot.data();
+            data['updateUpcomingElection'] = admin.firestore.FieldValue.serverTimestamp();
+            return snapshot.ref.set(data);
+          }
         }
+        return Promise.resolve();
       });
   } else {
     conv.user.storage.uniqid = uniqid('actions-');
@@ -89,7 +94,11 @@ function _saveAddress(db, conv, address) {
   return db
     .collection('users').doc(conv.user.storage.uniqid)
     .collection('triggers').doc('address')
-    .set({address: address, lang: lang});
+    .set({
+      address: address,
+      lang: lang,
+      updateUpcomingElection: admin.firestore.FieldValue.serverTimestamp()
+    });
 }
 
 function _askForPlace(conv, checkingAddress) {
