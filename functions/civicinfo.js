@@ -16,6 +16,12 @@ const civicinfo = google.civicinfo({
   auth: nconf.get('api_key')
 });
 
+exports.saveVersion = function(conv) {
+  const key = Object.keys(conv.contexts.input)
+    .find(key => key.indexOf('version-') === 0)
+  conv.data.version = key ? parseInt(key.substring(8)): 3;
+}
+
 exports.askForPlace = function(db, conv, place) {
   if (place) {
     _saveAddress(db, conv, place.formattedAddress);

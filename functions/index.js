@@ -29,6 +29,7 @@ const app = dialogflow({
 exports.dialogflowFirebaseFulfillment = functions.https.onRequest(app);
 
 app.intent('welcome', (conv) => {
+  civicinfo.saveVersion(conv);
   return civicinfo.fetchAddress(db, conv, false);
 });
 
