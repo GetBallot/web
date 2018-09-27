@@ -783,6 +783,11 @@ function _replyUpcomingElection(conv, election, prefix) {
 
     if (_hasContests(election)) {
       _summarizeContests(conv, election);
+    } else {
+      conv.ask(`<speak><break time="1s"/>
+        That's all I got for now. Say 'change address' if you need to change it, otherwise you can say 'bye'.
+      </speak>`);
+      conv.ask(new Suggestions(['bye']));
     }
   } else {
     conv.close(`Sorry, I couldn't find any elections.`);
