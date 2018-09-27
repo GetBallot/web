@@ -1,6 +1,6 @@
 'use strict';
 
-const { Place, Suggestions } = require('actions-on-google');
+const { Place, Button, BasicCard, Suggestions } = require('actions-on-google');
 const { google } = require('googleapis');
 const admin = require('firebase-admin');
 const path = require('path');
@@ -781,6 +781,8 @@ function _replyUpcomingElection(conv, election, prefix) {
 
     conv.ask('<speak>' + msg + '</speak>');
 
+    _askVotingLocationCard(conv, election);
+
     if (_hasContests(election)) {
       _summarizeContests(conv, election);
     } else {
@@ -795,14 +797,50 @@ function _replyUpcomingElection(conv, election, prefix) {
   return election;
 }
 
+function _askVotingLocationCard(conv, election) {
+  if (!_hasVotingLocation(election) ||
+      !conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT')) {
+    return;
+  }
+  const location = election.votingLocations[0];
+  const place = location.address.locationName || location.formattedAddress;
+  const address = encodeURI(location.formattedAddress);
+
+  const params = {
+    markers: `color:orange%7C${address}`,
+    zoom: 15,
+    size: '320x240',
+    key: nconf.get('api_key')
+  };
+  const imageUrl = 'https://maps.googleapis.com/maps/api/staticmap?' +
+    Object.keys(params).map(key => key + '=' + params[key]).join('&');
+
+  conv.ask(new BasicCard({
+    title: place,
+    subtitle: location.address.locationName ? location.formattedAddress : null,
+    buttons: new Button({
+      title: 'Open map',
+      url: 'https://www.google.com/maps?q=' + address
+    }),
+    image: {
+      url: imageUrl,
+      accessibilityText: `Map for ${location.formattedAddress}`
+    }
+  }));
+}
+
 function _replyVotingLocations(conv, election) {
   if (_hasVotingLocation(election)) {
     const location = election.votingLocations[0];
     const place = location.address.locationName || location.formattedAddress;
     const msg = `You can vote at ${place}.`;
+
     if (conv.data.version >= 4) {
-      conv.ask(`${msg} What else would you like to know about?`);
+      conv.ask(msg);
+      _askVotingLocationCard(conv, election);
+      conv.ask(`What else would you like to know about?`);
     } else {
+      _askVotingLocationCard(conv, election);
       conv.close(msg);
     }
   } else {
