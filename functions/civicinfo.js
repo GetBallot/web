@@ -68,25 +68,35 @@ exports.fetchAddress = function(db, conv, checkingAddress) {
             const data = snapshot.data();
             conv.ask(`I have ${data.address}.`);
           } else {
-            _setConfirmContext(conv, constants.CMD_ELECTION_INFO);
-            conv.ask(`Welcome back! Would you like to hear about the next election?`);
+            const modifiedAt = snapshot.get('updateUpcomingElection');
+            const now = new Date();
+
+            // Update upcoming election if older than 12 hours (43200000 ms)
+            const shouldUpdate = modifiedAt ? now - modifiedAt.toDate() > 43200000 : true;
+            if (shouldUpdate) {
+              const data = snapshot.data();
+              data['updateUpcomingElection'] = admin.firestore.FieldValue.serverTimestamp();
+              return snapshot.ref.set(data);
+            }
+
+            return db
+              .collection('users').doc(conv.user.storage.uniqid)
+              .collection('elections').doc('upcoming')
+              .get();
           }
         } else {
           _askForPlace(conv, checkingAddress);
         }
-        return snapshot;
+        return Promise.resolve();
       })
       .then(snapshot => {
-        if (snapshot.exists) {
-          const modifiedAt = snapshot.get('updateUpcomingElection');
-          const now = new Date();
-          // Update upcoming election if older than 12 hours
-          const shouldUpdate = modifiedAt ? now - modifiedAt.toDate() > 43200000 : true;
-          if (shouldUpdate) {
-            const data = snapshot.data();
-            data['updateUpcomingElection'] = admin.firestore.FieldValue.serverTimestamp();
-            return snapshot.ref.set(data);
-          }
+        const election = snapshot.exists ? snapshot.data() : null;
+        if (election) {
+          _replyUpcomingElection(conv, election, 'Welcome back! Your next election is');
+        } else {
+          _setConfirmContext(conv, constants.CMD_ELECTION_INFO);
+          conv.ask(`Welcome back! Let me go fetch your ballot information. Give me a moment, alright?`);
+          conv.ask(new Suggestions(['okay']));
         }
         return Promise.resolve();
       });
@@ -181,7 +191,7 @@ exports.upcomingElection = function(db, conv) {
     .get()
     .then(snapshot => {
       const election = snapshot.exists ? snapshot.data() : null;
-      _replyUpcomingElection(conv, election);
+      _replyUpcomingElection(conv, election, 'I found');
       return snapshot;
     });
 }
@@ -752,7 +762,7 @@ exports.formatAddressForSpeech = function(fields) {
     .join(', ');
 }
 
-function _replyUpcomingElection(conv, election) {
+function _replyUpcomingElection(conv, election, prefix) {
   if (!election) {
     conv.ask(`Sorry, I'm still looking.
       Please try again by saying 'upcoming election' in a few moments.`);
@@ -761,7 +771,7 @@ function _replyUpcomingElection(conv, election) {
   }
   if (election.election && election.election.electionDay) {
     const name = election.election.name || 'an election';
-    let msg = `I found ${name} on ${_formatDate(election.election.electionDay)}.`;
+    let msg = `${prefix} ${name} on ${_formatDate(election.election.electionDay)}.`;
 
     if (_hasVotingLocation(election)) {
       const location = election.votingLocations[0];
