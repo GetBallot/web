@@ -112,11 +112,12 @@ app.intent('candidate - in contest - fallback', (conv, params) => {
 app.intent('candidate - in contest - none', (conv) => {
   return civicinfo.bye(conv);
 });
-app.intent('candidate - one other', (conv, params) => {
-  return civicinfo.candidateOthersOne(db, conv, params);
+
+app.intent('choice by ordinal', (conv, params) => {
+  return civicinfo.choiceByOrdinal(db, conv, params);
 });
-app.intent('candidate - one other - no', (conv) => {
-  return civicinfo.bye(conv);
+app.intent('choice - confirm', (conv, params) => {
+  return civicinfo.choiceConfirm(db, conv, params);
 });
 
 app.intent('bye', (conv) => {

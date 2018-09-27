@@ -5,7 +5,7 @@ exports.CMD_CONTEST = 'contest';
 exports.CMD_CONTEST_ONE = 'contest-one'
 exports.CMD_CONTEST_WHICH = 'contest-which';
 exports.CMD_CANDIDATE_IN_CONTEST = 'candidate-in-contest';
-exports.CMD_CANDIDATE_OTHERS_ONE = 'candidate-others-one';
+exports.CMD_CHOICES = 'choices';
 
 exports.SOURCE_GOOGLE = 'civicinfo#voterInfoResponse';
 exports.SOURCE_BALLOT = 'getballot.com';

@@ -250,6 +250,10 @@ function _replyContests(conv, contests) {
       contests: contests.map(contest => contest.index)
     });
 
+    conv.contexts.set(constants.CMD_CHOICES, 1, {
+      contests: contests.map(contest => contest.index)
+    });
+
     const names = contests.map(contest => contest.name);
     conv.ask(`I found ${_joinWith(names, ', and ')}. ${_whichOne('contest')}`);
   }
@@ -262,12 +266,17 @@ function _askCandidatesInContest(conv, contest) {
     return;
   }
   if (candidates.length === 1) {
-    conv.ask(`${contest.name} has 1 candidate. ${_describeCandidate(contest, candidates[0])} Anything else?`);
+    conv.ask(`${_describeCandidate(contest, candidates[0])} That is the only candidate. Anything else?`);
     return;
   }
   conv.contexts.set(constants.CMD_CANDIDATE_IN_CONTEST, 2, {
     contest: contest.index
   });
+  conv.contexts.set(constants.CMD_CHOICES, 1, {
+    contest: contest.index,
+    candidates: contest.candidates.map((_, index) => index)
+  });
+
   const names = contest.candidates.map(candidate => candidate.name);
   conv.ask(`${contest.name} has ${candidates.length} candidates: ${_joinWith(names, ', and ')}. ${_whichOne('candidate')}`);
   _showSuggestions(conv, names);
@@ -331,18 +340,27 @@ function _replyCandidates(where, results, conv, input, params) {
     const candidate = results[0][1][0];
     let msg = _describeCandidate(contest, candidate);
 
-    const others = contest.candidates.filter(other => other !== candidate)
+    const others = contest.candidates
+      .map((candidate, index) => {
+        candidate.index = index;
+        return candidate;
+      })
+      .filter(other => other !== candidate)
     const names = others.map(candidate => candidate.name);
 
     conv.ask(`<speak>${msg}</speak>`);
     if (others.length === 1) {
-      conv.contexts.set(constants.CMD_CANDIDATE_OTHERS_ONE, 2, {
+      conv.contexts.set(constants.CMD_CHOICES, 1, {
         contest: contest.index,
-        candidate: others[0].index
+        candidates: others.map(candidate => candidate.index)
       });
       conv.ask(`Would you like to hear about the other candidate, ${names[0]}?`);
     }
     if (others.length > 1) {
+      conv.contexts.set(constants.CMD_CHOICES, 1, {
+        contest: contest.index,
+        candidates: others.map(candidate => candidate.index)
+      });
       conv.ask(`Would you like to hear about the other candidates? I have ${_joinWith(names, ', and ')}.`);
       _showSuggestions(conv, names);
     }
@@ -377,29 +395,6 @@ exports.candidateInContest = function(db, conv, params) {
     });
 }
 
-exports.candidateOthersOne = function(db, conv, params) {
-  return db
-    .collection('users').doc(conv.user.storage.uniqid)
-    .collection('elections').doc('upcoming')
-    .get()
-    .then(snapshot => {
-      const election = snapshot.exists ? snapshot.data() : null;
-      const context = conv.contexts.get(constants.CMD_CANDIDATE_OTHERS_ONE);
-      const results = context && context.parameters ?
-        _loadCandidate(election, context.parameters.contest, context.parameters.candidate) : null;
-      const suffix = 'What else would you like to hear about?';
-      if (results) {
-        const contest = results[0];
-        const candidate = results[1];
-        const msg = _describeCandidate(contest, candidate);
-        conv.ask(`<speak>${msg} ${suffix}</speak>`);
-      } else {
-        conv.ask(`Sorry I didn't find that candidate on your ballot. ${suffix}`);
-      }
-      return Promise.resolve();
-    });
-}
-
 exports.loadCandidate = function(election, contestPos, candidatePos) {
   return _loadCandidate(election, contestPos, candidatePos);
 }
@@ -415,6 +410,7 @@ function _loadCandidate(election, contestPos, candidatePos) {
   if (!contest || !contest.candidates || candidatePos >= contest.candidates.length) {
     return null;
   }
+  contest.index = contestPos;
   return [contest, contest.candidates[candidatePos]];
 }
 
@@ -626,9 +622,12 @@ exports.fallback = function(db, conv, params) {
       if (election) {
         // Substring match on contests
         const input = _normalize(conv.input.raw);
-        const contests = election.contests.filter(contest =>
-          _normalize(contest.name).indexOf(input) !== -1
-        );
+        const contests = election.contests
+          .map((contest, index) => {
+            contest.index = index;
+            return contest;
+          })
+          .filter(contest =>_normalize(contest.name).indexOf(input) !== -1);
         if (contests.length > 0) {
           _replyContests(conv, contests);
           return Promise.resolve();
@@ -662,6 +661,72 @@ function _replyGenerically(conv) {
     "I missed that."
   ];
   conv.ask(_pickRandomly(genericReply));
+}
+
+exports.choiceByOrdinal = function(db, conv, params) {
+  return db
+    .collection('users').doc(conv.user.storage.uniqid)
+    .collection('elections').doc('upcoming')
+    .get()
+  .then(snapshot => {
+    const election = snapshot.exists ? snapshot.data() : null;
+    const context = conv.contexts.get(constants.CMD_CHOICES);
+    if (!election || !context || !context.parameters || !params.ordinal) {
+      _replyGenerically(conv);
+      return Promise.resolve();
+    }
+    const index = params.ordinal - 1;
+
+    if (context.parameters.contest && context.parameters.contest < election.contests.length &&
+        context.parameters.candidates && index < context.parameters.candidates.length) {
+      const contest = election.contests[context.parameters.contest];
+      const candidatePos = context.parameters.candidates[index];
+      const candidate = contest.candidates[candidatePos];
+      const results = [ [ contest, [candidate] ] ];
+      _replyCandidates(`in ${contest.name}`, results, conv, conv.input.raw, params);
+      return Promise.resolve();
+    }
+
+    if (context.parameters.contests && index < context.parameters.contests.length) {
+      const contestPos = context.parameters.contests[index];
+      const contest = election.contests[contestPos];
+      contest.index = contestPos;
+      _askCandidatesInContest(conv, contest);
+      return Promise.resolve();
+    }
+
+    _replyGenerically(conv);
+    return Promise.resolve();
+  });
+}
+
+
+exports.choiceConfirm = function(db, conv, params) {
+  return db
+    .collection('users').doc(conv.user.storage.uniqid)
+    .collection('elections').doc('upcoming')
+    .get()
+  .then(snapshot => {
+    const election = snapshot.exists ? snapshot.data() : null;
+    const context = conv.contexts.get(constants.CMD_CHOICES);
+    if (!election || !context || !context.parameters) {
+      _replyGenerically(conv);
+      return Promise.resolve();
+    }
+
+    if (context.parameters.contest && context.parameters.contest < election.contests.length &&
+        context.parameters.candidates && context.parameters.candidates.length === 1) {
+      const contest = election.contests[context.parameters.contest];
+      const candidatePos = context.parameters.candidates[0];
+      const candidate = contest.candidates[candidatePos];
+      const results = [ [ contest, [candidate] ] ];
+      _replyCandidates(`in ${contest.name}`, results, conv, conv.input.raw, params);
+      return Promise.resolve();
+    }
+
+    _replyGenerically(conv);
+    return Promise.resolve();
+  });
 }
 
 exports.bye = function(conv) {
@@ -747,6 +812,11 @@ function _replyContestsAll(conv, election) {
       'There is 1 contest' : `There are ${election.contests.length} contests`;
     const names = election.contests.map(contest => contest.name);
     const suffix = conv.data.version >= 4 ? ` ${_whichOne('contest')}` : '';
+
+    conv.contexts.set(constants.CMD_CHOICES, 1, {
+      contests: contests.map((_, index) => index)
+    });
+
     conv.ask(`${prefix}: ${_joinWith(names, ', and ')}.${suffix}`);
     _showSuggestions(conv, names);
   } else {
@@ -790,6 +860,10 @@ function _summarizeContests(conv, election) {
     'There are two contests: ' : `There are ${election.contests.length} contests, including `;
   const twoContests = `${election.contests[0].name} and ${election.contests[1].name}.`;
   const suffix = _whichOne('contest');
+
+  conv.contexts.set(constants.CMD_CHOICES, 1, {
+    contests: election.contests.map((_, index) => index)
+  });
 
   if (conv.data.version >= 4) {
     conv.ask(`${prefix} ${twoContests} ${suffix}`);
