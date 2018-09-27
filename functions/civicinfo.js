@@ -375,7 +375,13 @@ function _replyCandidates(where, results, conv, input, params) {
       _showSuggestions(conv, names);
     }
   } else {
-    const query = params && params.candidate ? params.candidate : input;
+    const context = conv.contexts.get(constants.CMD_CHOICES);
+    if (context && context.parameters) {
+      conv.contexts.set(constants.CMD_CHOICES, 1, context.parameters);
+    }
+    const query = params && params.candidate ? params.candidate :
+      params && params.party ? _partyCandidate(params.party) :
+      input;
     conv.ask(`Sorry I didn't find ${query} ${where}. Ask me about another candidate?`);
   }
   return Promise.resolve();
@@ -426,12 +432,16 @@ function _loadCandidate(election, contestPos, candidatePos) {
 
 function _describeCandidate(contest, candidate) {
   const party = constants.PARTY_NAMES[candidate.party] || candidate.party;
-  const partyInfix = party ? `a ${party} candidate ` : '';
-  let msg = `${candidate.name} is ${partyInfix}running for ${contest.name}.`;
+  let msg = `${candidate.name} is ${_partyCandidate(candidate.party)}running for ${contest.name}.`;
   if (candidate.video && candidate.video.audio) {
      msg += `<audio src="${candidate.video.audio}"></audio>`;
   }
   return msg;
+}
+
+function _partyCandidate(query) {
+  const party = constants.PARTY_NAMES[query] || query;
+  return party ? `a ${party} candidate ` : '';
 }
 
 function _normalize(str) {
@@ -702,6 +712,40 @@ exports.choiceByOrdinal = function(db, conv, params) {
       const contest = election.contests[contestPos];
       contest.index = contestPos;
       _askCandidatesInContest(conv, contest);
+      return Promise.resolve();
+    }
+
+    _replyGenerically(conv);
+    return Promise.resolve();
+  });
+}
+
+exports.choiceByParty = function(db, conv, params) {
+  return db
+    .collection('users').doc(conv.user.storage.uniqid)
+    .collection('elections').doc('upcoming')
+    .get()
+  .then(snapshot => {
+    const election = snapshot.exists ? snapshot.data() : null;
+    const context = conv.contexts.get(constants.CMD_CHOICES);
+
+    if (!election || !context || !context.parameters || !params.party) {
+      _replyGenerically(conv);
+      return Promise.resolve();
+    }
+
+    if (context.parameters.contest && context.parameters.contest < election.contests.length &&
+        context.parameters.candidates) {
+      const queries = [params.party, constants.PARTY_NAMES[params.party]]
+        .filter(q => q)
+        .map(q => _normalize(q));
+      const contest = election.contests[context.parameters.contest];
+      const candidates = context.parameters.candidates
+        .map(index => contest.candidates[index])
+        .filter(candidate => candidate.party)
+        .filter(candidate => queries.includes(_normalize(candidate.party)));
+      const results = candidates && candidates.length > 0 ? [ [ contest, candidates ] ] : [];
+      _replyCandidates(`in ${contest.name}`, results, conv, conv.input.raw, params);
       return Promise.resolve();
     }
 

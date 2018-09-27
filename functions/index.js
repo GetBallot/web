@@ -113,8 +113,11 @@ app.intent('candidate - in contest - none', (conv) => {
   return civicinfo.bye(conv);
 });
 
-app.intent('choice by ordinal', (conv, params) => {
+app.intent('choice-by-ordinal', (conv, params) => {
   return civicinfo.choiceByOrdinal(db, conv, params);
+});
+app.intent('choice-by-party', (conv, params) => {
+  return civicinfo.choiceByParty(db, conv, params);
 });
 app.intent('choice - confirm', (conv, params) => {
   return civicinfo.choiceConfirm(db, conv, params);
