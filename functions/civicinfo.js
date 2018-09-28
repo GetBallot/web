@@ -493,20 +493,32 @@ function _findContests(contests, input, params) {
   Object.keys(params).forEach(key => {
     const value = params[key];
     if (typeof value === 'string') {
-      params[key] = _normalize(value);
+      if (key === 'number') {
+        params[key] = parseInt(value);
+      } else {
+        params[key] = _normalize(value);
+      }
     }
   })
 
   // Contest match
-  if (params.contest) {
-    matches = _matchName(contests, params, params.contest);
+  if (params.original) {
+    matches = _matchName(contests, params, params.original);
+    if (matches.length > 0) {
+      return matches;
+    }
+  }
+
+  // Office match
+  if (params.office) {
+    matches = _matchName(contests, params, params.office);
     if (matches.length > 0) {
       return matches;
     }
   }
 
   // US House
-  if (params.contest === 'representative' &&
+  if (params.office === 'representative' &&
       (!params.state || input.indexOf('cd') !== -1)) {
     matches = _matchType(contests, params, 'cd');
     if (matches.length === 1) {
@@ -515,8 +527,8 @@ function _findContests(contests, input, params) {
   }
 
   // State Senate
-  if (params.contest === 'state senate' ||
-      (params.contest === 'senator' && params.state)) {
+  if (params.office === 'state senate' ||
+      (params.office === 'senator' && params.state)) {
     matches = _matchType(contests, params, 'sldu');
     if (matches.length === 1) {
       return matches;
@@ -524,18 +536,20 @@ function _findContests(contests, input, params) {
   }
 
   // State House
-  if (params.contest === 'state house' ||
-      (params.contest === 'representative' && params.state)) {
+  if (params.office === 'state house' ||
+      (params.office === 'representative' && params.state)) {
     matches = _matchType(contests, params, 'sldl');
     if (matches.length === 1) {
       return matches;
     }
   }
 
-  // Query
-  if (params.query && params.query.length > 0) {
-    const query = _normalize(params.query);
+  // Query & Contest
+  const queries = [params.query, params.original]
+    .filter(q => q && q.length > 0)
+    .map(q => _normalize(q));
 
+  for (let query of queries) {
     // Exact match
     matches = contests.filter(contest => _normalize(contest.name) === query);
     if (matches.length > 0) {
@@ -549,9 +563,9 @@ function _findContests(contests, input, params) {
     }
   }
 
-  if (params.contest && params.contest.length > 0) {
+  if (params.office && params.office.length > 0) {
     for (let query of ['commissioner', 'education', 'regent']) {
-      if (params.contest.indexOf(query) !== -1) {
+      if (params.office.indexOf(query) !== -1) {
         return _matchName(contests, params, query);
       }
     }

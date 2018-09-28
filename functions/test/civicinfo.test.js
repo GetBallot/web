@@ -96,7 +96,7 @@ describe('CivicInfo', () => {
         contests: [ US_SENATOR, KS_SD_6 ]
       };
       const input = 'Senate';
-      const params = { contest: 'Senator', country: 'United States of America' };
+      const params = { office: 'Senator', country: 'United States of America' };
 
       const contests = civicinfo.findContests(election, input, params);
       assert.equal(1, contests.length);
@@ -108,7 +108,7 @@ describe('CivicInfo', () => {
         contests: [ US_SENATOR, KS_SD_6 ]
       };
       const input = 'Senator';
-      const params = { contest: 'Senator' };
+      const params = { office: 'Senator' };
 
       const contests = civicinfo.findContests(election, input, params);
       assert.equal(2, contests.length);
@@ -122,8 +122,8 @@ describe('CivicInfo', () => {
         };
         const input = 'CD 4';
         const params = {
-          contest: 'Representative',
-          'number': 4
+          office: 'Representative',
+          number: 4
         };
 
         const contests = civicinfo.findContests(election, input, params);
@@ -137,9 +137,25 @@ describe('CivicInfo', () => {
       };
       const input = 'Colorado HD 50';
       const params = {
-        contest: 'State House',
+        office: 'State House',
         state: 'Colorado',
-        'number': 50
+        number: 50
+      };
+
+      const contests = civicinfo.findContests(election, input, params);
+      assert.equal(1, contests.length);
+      assert.equal(CO_HD_50, contests[0]);
+    });
+
+    it('should return colorado house with district number', () => {
+      const election = {
+        contests: [ CO_CD_4, CO_HD_50 ]
+      };
+      const input = 'Colorado House 50';
+      const params = {
+        office: 'Representative',
+        state: 'Colorado',
+        number: '50'
       };
 
       const contests = civicinfo.findContests(election, input, params);
@@ -153,7 +169,7 @@ describe('CivicInfo', () => {
       };
       const input = 'State House';
       const params = {
-        contest: 'State House',
+        office: 'State House',
       };
 
       const contests = civicinfo.findContests(election, input, params);
@@ -167,7 +183,7 @@ describe('CivicInfo', () => {
       };
       const input = 'State House';
       const params = {
-        contest: 'State House',
+        office: 'State House',
         'number': 48
       };
 
@@ -181,7 +197,7 @@ describe('CivicInfo', () => {
       };
       const input = 'Kansas HD 50';
       const params = {
-        contest: 'State House',
+        office: 'State House',
         state: 'ks',
         'number': 50
       };
@@ -196,7 +212,7 @@ describe('CivicInfo', () => {
       };
       const input = 'Colorado House District 50';
       const params = {
-        contest: 'Representative',
+        office: 'Representative',
         state: 'Colorado',
         'number': 50
       };
@@ -212,7 +228,7 @@ describe('CivicInfo', () => {
       };
       const input = 'Colorado House';
       const params = {
-        contest: 'Representative',
+        office: 'Representative',
         state: 'Colorado',
       };
 
@@ -227,7 +243,7 @@ describe('CivicInfo', () => {
       };
       const input = 'Kansas Senate';
       const params = {
-        contest: 'Senator',
+        office: 'Senator',
         state: 'Kansas',
       };
 
@@ -242,7 +258,7 @@ describe('CivicInfo', () => {
       };
       const input = 'County Commissioner';
       const params = {
-        contest: 'County Commissioner',
+        office: 'County Commissioner',
         state: 'Colorado',
       };
 
@@ -258,7 +274,7 @@ describe('CivicInfo', () => {
       };
       const input = 'County Commissioner 2';
       const params = {
-        contest: 'County Commissioner',
+        office: 'County Commissioner',
         state: 'Colorado',
         'number': 2
       };
@@ -274,7 +290,7 @@ describe('CivicInfo', () => {
       };
       const input = 'County Commissioner At-Large';
       const params = {
-        contest: 'County Commissioner',
+        office: 'County Commissioner',
         scope: 'At-Large'
       };
 
@@ -289,7 +305,7 @@ describe('CivicInfo', () => {
       };
       const input = 'Who is running for CU Regent?';
       const params = {
-        contest: 'University Regent'
+        office: 'University Regent'
       };
 
       const contests = civicinfo.findContests(election, input, params);
@@ -304,7 +320,7 @@ describe('CivicInfo', () => {
       };
       const input = 'Who is running for CU Regent District 5?';
       const params = {
-        contest: 'University Regent',
+        office: 'University Regent',
         'number': 5
       };
 
@@ -319,7 +335,7 @@ describe('CivicInfo', () => {
       };
       const input = 'Who is running for CU Regent District 4?';
       const params = {
-        contest: 'University Regent',
+        office: 'University Regent',
         'number': 4
       };
 
@@ -333,7 +349,7 @@ describe('CivicInfo', () => {
       };
       const input = 'CU Regent At-Large';
       const params = {
-        contest: 'University Regent',
+        office: 'University Regent',
         scope: 'At-Large'
       };
 
