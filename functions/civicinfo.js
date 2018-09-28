@@ -281,7 +281,8 @@ function _askCandidatesInContest(conv, contest) {
     return;
   }
   if (candidates.length === 1) {
-    conv.ask(`${_describeCandidate(contest, candidates[0])} That is the only candidate. Anything else?`);
+    const desc = _describeCandidate(conv, contest, candidates[0]);
+    conv.ask(`${desc[0]} That is the only candidate. Anything else?`);
     return;
   }
   conv.contexts.set(constants.CMD_CANDIDATE_IN_CONTEST, 2, {
@@ -353,7 +354,9 @@ function _replyCandidates(where, results, conv, input, params) {
   if (results.length === 1) {
     const contest = results[0][0];
     const candidate = results[0][1][0];
-    let msg = _describeCandidate(contest, candidate);
+    const desc = _describeCandidate(conv, contest, candidate);
+    let msg = desc[0];
+    const card = desc[1];
 
     const others = contest.candidates
       .map((candidate, index) => {
@@ -364,6 +367,10 @@ function _replyCandidates(where, results, conv, input, params) {
     const names = others.map(candidate => candidate.name);
 
     conv.ask(`<speak>${msg}</speak>`);
+    if (card) {
+      conv.ask(card);
+    }
+
     if (others.length === 1) {
       conv.contexts.set(constants.CMD_CHOICES, 1, {
         contest: contest.index,
@@ -444,13 +451,28 @@ function _loadCandidate(election, contestPos, candidatePos) {
   return [contest, contest.candidates[candidatePos]];
 }
 
-function _describeCandidate(contest, candidate) {
-  const party = constants.PARTY_NAMES[candidate.party] || candidate.party;
+function _describeCandidate(conv, contest, candidate) {
   let msg = `${candidate.name} is ${_partyCandidate(candidate.party)}running for ${contest.name}.`;
-  if (candidate.video && candidate.video.audio) {
-     msg += `<audio src="${candidate.video.audio}"></audio>`;
+  let card = null;
+  if (candidate.video) {
+    if (conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT')) {
+      card = new BasicCard({
+        buttons: new Button({
+          title: 'Play video',
+          url: candidate.video.url
+        }),
+        image: {
+          url: candidate.video.thumbnail,
+          accessibilityText: `Video for ${candidate.name}`
+        }
+      });
+    } else {
+      if (conv.surface.capabilities.has('actions.capability.AUDIO_OUTPUT') && candidate.video.audio) {
+        msg += `<audio src="${candidate.video.audio}"></audio>`;
+      }
+    }
   }
-  return msg;
+  return [msg, card];
 }
 
 function _partyCandidate(query) {
