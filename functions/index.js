@@ -44,6 +44,13 @@ app.intent('welcome - yes', (conv) => {
 app.intent('change-address', (conv) => {
   return civicinfo.changeAddress(conv);
 });
+app.intent('change-address - confirm', (conv, params, confirmationGranted) => {
+  if (confirmationGranted) {
+    return civicinfo.changeAddress(conv);
+  } else {
+    return civicinfo.bye(conv);
+  }
+});
 
 app.intent('check-address', (conv) => {
   return civicinfo.fetchAddress(db, conv, true);

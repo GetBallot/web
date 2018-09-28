@@ -1,6 +1,6 @@
 'use strict';
 
-const { Place, Button, BasicCard, Suggestions } = require('actions-on-google');
+const { Place, Button, Confirmation, BasicCard, Suggestions } = require('actions-on-google');
 const { google } = require('googleapis');
 const admin = require('firebase-admin');
 const path = require('path');
@@ -92,7 +92,7 @@ exports.fetchAddress = function(db, conv, checkingAddress) {
       .then(snapshot => {
         const election = snapshot.exists ? snapshot.data() : null;
         if (election) {
-          _replyUpcomingElection(conv, election, 'Welcome back! Your next election is');
+          _replyUpcomingElection(conv, election, 'Your next election is', true);
         } else {
           _setConfirmContext(conv, constants.CMD_ELECTION_INFO);
           conv.ask(`Welcome back! Let me go fetch your ballot information. Give me a moment, alright?`);
@@ -191,7 +191,7 @@ exports.upcomingElection = function(db, conv) {
     .get()
     .then(snapshot => {
       const election = snapshot.exists ? snapshot.data() : null;
-      _replyUpcomingElection(conv, election, 'I found');
+      _replyUpcomingElection(conv, election, 'I found', false);
       return snapshot;
     });
 }
@@ -854,16 +854,17 @@ exports.formatAddressForSpeech = function(fields) {
     .join(', ');
 }
 
-function _replyUpcomingElection(conv, election, prefix) {
+function _replyUpcomingElection(conv, election, prefix, returning) {
   if (!election) {
     conv.ask(`Sorry, I'm still looking.
       Please try again by saying 'upcoming election' in a few moments.`);
     conv.ask(new Suggestions(['upcoming election']));
     return election;
   }
+
   if (election.election && election.election.electionDay) {
     const name = election.election.name || 'an election';
-    let msg = `${prefix} ${name} on ${_formatDate(election.election.electionDay)}.`;
+    let msg = `${returning ? 'Welcome back! ' : ''}${prefix} ${name} on ${_formatDate(election.election.electionDay)}.`;
 
     if (_hasVotingLocation(election)) {
       const location = election.votingLocations[0];
@@ -885,7 +886,9 @@ function _replyUpcomingElection(conv, election, prefix) {
       conv.ask(new Suggestions(['bye']));
     }
   } else {
-    conv.close(`Sorry, I couldn't find any elections.`);
+    _setContext(conv, constants.CMD_CHANGE_ADDRESS);
+    const msg = returning ? `Welcome back! hmm, I don't see any elections` : `Sorry, I couldn't find any elections`;
+    conv.ask(new Confirmation(`${msg}. Would you like to change your address?`));
   }
   return election;
 }
