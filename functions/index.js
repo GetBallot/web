@@ -49,7 +49,7 @@ app.intent('change-address - confirm', (conv, params, confirmationGranted) => {
   if (confirmationGranted) {
     return civicinfo.changeAddress(conv);
   } else {
-    return civicinfo.bye(conv);
+    return civicinfo.bye(db, conv);
   }
 });
 
@@ -82,7 +82,7 @@ app.intent('voting-location - confirm', (conv) => {
   return civicinfo.votingLocations(db, conv);
 });
 app.intent('voting-location - no', (conv) => {
-  return civicinfo.bye(conv);
+  return civicinfo.bye(db, conv);
 });
 
 app.intent('contests', (conv) => {
@@ -92,7 +92,7 @@ app.intent('contests - confirm', (conv) => {
   return civicinfo.contests(db, conv);
 });
 app.intent('contests - no', (conv) => {
-  return civicinfo.bye(conv);
+  return civicinfo.bye(db, conv);
 });
 app.intent('contests-list', (conv) => {
   return civicinfo.contestsAll(db, conv);
@@ -120,7 +120,7 @@ app.intent('candidate - in contest - fallback', (conv, params) => {
   return civicinfo.candidateInContest(db, conv, params);
 });
 app.intent('candidate - in contest - none', (conv) => {
-  return civicinfo.bye(conv);
+  return civicinfo.bye(db, conv);
 });
 
 app.intent('choice-by-ordinal', (conv, params) => {
@@ -138,10 +138,10 @@ app.intent('trigger-query - confirm', (conv, params) => {
 });
 
 app.intent('bye', (conv) => {
-  return civicinfo.bye(conv);
+  return civicinfo.bye(db, conv);
 });
 app.intent('actions.intent.CANCEL', (conv) => {
-  return civicinfo.bye(conv);
+  return civicinfo.bye(db, conv);
 });
 
 app.intent('help', (conv) => {

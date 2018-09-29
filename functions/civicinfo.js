@@ -937,8 +937,25 @@ exports.choiceConfirm = function(db, conv, params) {
   });
 }
 
-exports.bye = function(conv) {
-  conv.close(`Thank you for using Ballot Guide. Remember to vote!`);
+exports.bye = function(db, conv) {
+  if (!conv.user.storage.uniqid) {
+    conv.close(`Thank you for using Ballot Guide. Remember to vote!`);
+    return Promise.resolve();
+  }
+
+  return db
+    .collection('users').doc(conv.user.storage.uniqid)
+    .collection('elections').doc('upcoming')
+    .get()
+  .then(snapshot => {
+    const election = snapshot.exists ? snapshot.data() : null;
+    const lang = election ? election.lang : null;
+    const electionDay = election && election.election && election.election.electionDay ?
+      _shortDate(election.election.electionDay, lang) : null;
+    const suffix = electionDay ? ` on ${electionDay}` : '';
+    conv.close(`<speak>Thank you for using Ballot Guide. Remember to vote${suffix}!</speak>`);
+    return Promise.resolve();
+  });
 }
 
 exports.help = function(db, conv) {
@@ -1218,7 +1235,15 @@ function _formatDate(dateStr) {
   const year = dateStr.substring(0, 4);
   const month = dateStr.substring(4, 6);
   const day = dateStr.substring(6, 8);
-  return year + '-' + month + '-' + day;
+  return `${year}-${month}-${day}`;
+}
+
+function _shortDate(dateStr, lang) {
+  const year = dateStr.substring(0, 4);
+  const month = parseInt(dateStr.substring(4, 6));
+  const day = dateStr.substring(6, 8);
+  const date = new Date(year, month-1, day);
+  return date.toLocaleDateString(lang || 'en', {month: 'long', day: 'numeric'});
 }
 
 function _joinWith(items, lastConnector) {
