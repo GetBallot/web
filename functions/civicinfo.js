@@ -16,26 +16,42 @@ const civicinfo = google.civicinfo({
   auth: nconf.get('api_key')
 });
 
-exports.saveVersion = function(conv) {
-  const key = Object.keys(conv.contexts.input)
-    .find(key => key.indexOf('version-') === 0)
-  conv.data.version = key ? parseInt(key.substring(8)): 3;
+exports.init = function(conv, intent) {
+  if (!conv.data.version) {
+    const key = Object.keys(conv.contexts.input)
+      .find(key => key.indexOf('version-') === 0)
+    conv.data.version = key ? parseInt(key.substring(8)): 3;
+  }
+
+  const query = conv.arguments.parsed.input.trigger_query;
+  if (query) {
+    conv.data.query = {
+      intent: intent,
+      text: query
+    };
+  }
 }
 
 exports.askForPlace = function(db, conv, place) {
-  if (place) {
-    _saveAddress(db, conv, place.formattedAddress);
-    _setConfirmContext(conv, constants.CMD_ELECTION_INFO);
-    conv.ask(`<speak>
+  if (!place) {
+    conv.close(`Sorry, I couldn't find where you are registered to vote.`);
+    return Promise.resolve();
+  }
+
+  _saveAddress(db, conv, place.formattedAddress);
+
+  // TODO: Direct look up if conv.data.query is defined
+
+  _setConfirmContext(conv, constants.CMD_ELECTION_INFO);
+  conv.contexts.set(constants.CMD_FETCH_ELECTION, 3, {});
+  conv.ask(`<speak>
     Got it.
     <break time="1s"/>
     ${place.formattedAddress}.
     <break time="2s"/>
-    Would you like to know more about the next election?
-    </speak>`);
-  } else {
-    conv.close(`Sorry, I couldn't find where you are registered to vote.`);
-  }
+    Now I will use your voting address to find out what's on your ballot. Give me a few moments, alright?
+  </speak>`);
+  return Promise.resolve();
 }
 
 exports.clearAddress = function(db, conv, address) {
@@ -45,7 +61,7 @@ exports.clearAddress = function(db, conv, address) {
     .delete()
     .then(snapshot => {
       conv.ask(`Voting address cleared.`);
-      _askForPlace(conv);
+      _askForPlace(conv, false);
       return snapshot;
     });
 }
@@ -57,58 +73,75 @@ exports.saveVersion = function(conv) {
 }
 
 exports.fetchAddress = function(db, conv, checkingAddress) {
-  if (conv.user.storage.uniqid) {
-    return db
-      .collection('users').doc(conv.user.storage.uniqid)
-      .collection('triggers').doc('address')
-      .get()
-      .then(snapshot => {
-        if (snapshot.exists) {
-          if (checkingAddress) {
-            const data = snapshot.data();
-            conv.ask(`I have ${data.address}.`);
-          } else {
-            const modifiedAt = snapshot.get('updateUpcomingElection');
-            const now = new Date();
+  if (!conv.user.storage.uniqid) {
+    conv.user.storage.uniqid = uniqid('actions-');
+    _askForPlace(conv, false);
+    return Promise.resolve();
+  }
 
-            // Update upcoming election if older than 12 hours (43200000 ms)
-            const shouldUpdate = modifiedAt ? now - modifiedAt.toDate() > 43200000 : true;
-            if (shouldUpdate) {
-              const data = snapshot.data();
-              data['updateUpcomingElection'] = admin.firestore.FieldValue.serverTimestamp();
-              return snapshot.ref.set(data);
-            }
-
-            return db
-              .collection('users').doc(conv.user.storage.uniqid)
-              .collection('elections').doc('upcoming')
-              .get();
-          }
+  var hasAddress = false;
+  return db
+    .collection('users').doc(conv.user.storage.uniqid)
+    .collection('triggers').doc('address')
+    .get()
+    .then(snapshot => {
+      if (snapshot.exists) {
+        hasAddress = true;
+        if (checkingAddress) {
+          const data = snapshot.data();
+          conv.ask(`I have ${data.address}. Anything else?`);
+          conv.ask(new Suggestions(['help']));
+          return Promise.resolve();
         } else {
-          _askForPlace(conv, checkingAddress);
+          const modifiedAt = snapshot.get('updateUpcomingElection');
+          const now = new Date();
+
+          // Update upcoming election if older than 12 hours (43200000 ms)
+          const shouldUpdate = modifiedAt ? now - modifiedAt.toDate() > 43200000 : true;
+          if (shouldUpdate) {
+            const data = snapshot.data();
+            data['updateUpcomingElection'] = admin.firestore.FieldValue.serverTimestamp();
+            return snapshot.ref.set(data);
+          }
+
+          return db
+            .collection('users').doc(conv.user.storage.uniqid)
+            .collection('elections').doc('upcoming')
+            .get();
         }
+      } else {
+        _askForPlace(conv, checkingAddress);
         return Promise.resolve();
-      })
-      .then(snapshot => {
-        const election = snapshot.exists ? snapshot.data() : null;
-        if (election) {
-          _replyUpcomingElection(conv, election, 'Your next election is', true);
+      }
+    })
+    .then(snapshot => {
+      if (checkingAddress || !hasAddress) {
+        return Promise.resolve();
+      }
+
+      const election = snapshot && snapshot.exists ? snapshot.data() : null;
+      const query = conv.data.query;
+      if (election) {
+        if (!query ||
+            !_genericSearch(conv, election, conv.input.raw, { query: query.text })) {
+        _replyUpcomingElection(conv, election, 'Your next election is', true);
+        }
+      } else {
+        if (query && conv.data.version >= 6) {
+          conv.contexts.set(constants.CMD_TRIGGER_QUERY, 5, { query: query.text } );
+          conv.ask(new Confirmation(`Let me go fetch the information for ${query.text}. Give me a moment, alright?`));
         } else {
           _setConfirmContext(conv, constants.CMD_ELECTION_INFO);
           conv.ask(`Welcome back! Let me go fetch your ballot information. Give me a moment, alright?`);
           conv.ask(new Suggestions(['okay']));
         }
-        return Promise.resolve();
-      });
-  } else {
-    conv.user.storage.uniqid = uniqid('actions-');
-    _askForPlace(conv, checkingAddress);
-  }
-  return Promise.resolve();
+      }
+      return Promise.resolve();
+    });
 }
 
 exports.changeAddress = function(conv) {
-  _askForPlace(conv);
+  _askForPlace(conv, false);
 }
 
 function _saveAddress(db, conv, address) {
@@ -233,6 +266,16 @@ exports.contestsAll = function(db, conv) {
 }
 
 exports.contest = function(db, conv, params) {
+  if (!conv.user.storage.uniqid) {
+    conv.user.storage.uniqid = uniqid('actions-');
+    _askForPlace(conv, false);
+    return Promise.resolve();
+  }
+
+  if (conv.data.query && !params.query) {
+    params.query = conv.data.query.text;
+  }
+
   return db
     .collection('users').doc(conv.user.storage.uniqid)
     .collection('elections').doc('upcoming')
@@ -338,6 +381,16 @@ exports.contestWhich = function(db, conv, params) {
 }
 
 exports.candidate = function(db, conv, params) {
+  if (!conv.user.storage.uniqid) {
+    conv.user.storage.uniqid = uniqid('actions-');
+    _askForPlace(conv, false);
+    return Promise.resolve();
+  }
+
+  if (conv.data.query && !params.query) {
+    params.query = conv.data.query.text;
+  }
+
   return db
     .collection('users').doc(conv.user.storage.uniqid)
     .collection('elections').doc('upcoming')
@@ -386,20 +439,22 @@ function _replyCandidates(where, results, conv, input, params) {
       conv.ask(`Would you like to hear about the other candidates? I have ${_joinWith(names, ', and ')}.`);
       _showSuggestions(conv, names);
     }
-  } else {
-    const context = conv.contexts.get(constants.CMD_CHOICES);
-    if (context && context.parameters) {
-      conv.contexts.set(constants.CMD_CHOICES, 1, context.parameters);
-    }
-    const query = [
-      params ? params.candidate : null,
-      params && params.party ? _partyCandidate(params.party) : null,
-      params ? params.query : null,
-      input
-    ].find(q => q);
-    conv.ask(`Sorry I didn't find ${query} ${where}. Ask me about another candidate?`);
-    conv.ask(new Suggestions(['help']));
+    return Promise.resolve();
   }
+
+  const context = conv.contexts.get(constants.CMD_CHOICES);
+  if (context && context.parameters) {
+    conv.contexts.set(constants.CMD_CHOICES, 1, context.parameters);
+  }
+  const query = [
+    params ? params.candidate : null,
+    params && params.party ? _partyCandidate(params.party) : null,
+    params ? params.query : null,
+    input
+  ].find(q => q);
+  conv.ask(`Sorry I didn't find ${query} ${where}. Ask me about another candidate?`);
+  conv.ask(new Suggestions(['help']));
+
   return Promise.resolve();
 }
 
@@ -566,8 +621,8 @@ function _findContests(contests, input, params) {
     }
   }
 
-  // Query & Contest
-  const queries = [params.query, params.original]
+  // Query, contest & input
+  const queries = [params.query, params.original, input]
     .filter(q => q && q.length > 0)
     .map(q => _normalize(q));
 
@@ -708,30 +763,59 @@ exports.fallback = function(db, conv, params) {
     .get()
     .then(snapshot => {
       const election = snapshot.exists ? snapshot.data() : null;
-      if (election) {
-        // Substring match on contests
-        const input = _normalize(conv.input.raw);
-        const contests = election.contests
-          .map((contest, index) => {
-            contest.index = index;
-            return contest;
-          })
-          .filter(contest =>_normalize(contest.name).indexOf(input) !== -1);
-        if (contests.length > 0) {
-          _replyContests(conv, contests);
-          return Promise.resolve();
-        }
-
-        // Candidates
-        const results = election ? _findCandidates(election.contests, input, params) : [];
-        if (results.length > 0) {
-          _replyCandidates('on your ballot', results, conv, input, params);
-          return Promise.resolve();
-        }
+      const input = _normalize(conv.input.raw);
+      if (!_genericSearch(conv, election, input, params)) {
+        _replyGenerically(conv);
       }
-      _replyGenerically(conv);
       return Promise.resolve();
     });
+}
+
+exports.triggerQuery = function(db, conv, params) {
+  return db
+    .collection('users').doc(conv.user.storage.uniqid)
+    .collection('elections').doc('upcoming')
+    .get()
+    .then(snapshot => {
+      const election = snapshot.exists ? snapshot.data() : null;
+      const input = _normalize(conv.input.raw);
+
+      if (!election) {
+        const suffix = conv.data.query ? ` Please ask for ${conv.data.query.text} again in a bit.` : '';
+        conv.ask(`Sorry, I'm still looking.${suffix}`);
+        conv.ask(new Suggestions([conv.data.query.text]));
+        return Promise.resolve();
+      }
+
+      if (!_genericSearch(conv, election, input, params)) {
+        _replyGenerically(conv);
+      }
+
+      return Promise.resolve();
+    });
+}
+
+function _genericSearch(conv, election, input, params) {
+  if (conv.data.query && !params.query) {
+    params.query = conv.data.query.text;
+  }
+
+  if (election) {
+    // Contests
+    const contests = election ? _findContests(election.contests, input, params) : [];
+    if (contests.length > 0) {
+      _replyContests(conv, contests);
+      return true;
+    }
+    // Candidates
+    const results = election ? _findCandidates(election.contests, input, params) : [];
+    if (results.length > 0) {
+      _replyCandidates('on your ballot', results, conv, input, params);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function _replyGenerically(conv) {
@@ -878,8 +962,21 @@ exports.formatAddressForSpeech = function(fields) {
 
 function _replyUpcomingElection(conv, election, prefix, returning) {
   if (!election) {
-    conv.ask(`Sorry, I'm still looking.
-      Please try again by saying 'upcoming election' in a few moments.`);
+    const context = conv.contexts.get(constants.CMD_FETCH_ELECTION);
+    if (context && context.lifespan === 1) {
+      _setConfirmContext(conv, constants.CMD_ELECTION_INFO);
+      conv.ask(`<speak>Sorry, I'm still compiling the results. ` +
+        `<break time="1s"/>Why does it take so long? ` +
+        `<break time="1s"/>First, I take your voting address and look up your voting districts, ` +
+        `for instance, congressional district, county, state house, and more. ` +
+        `<break time="1s"/>Then, I figure out ` +
+        `the elections for each of them, and put it all together. ` +
+        `<break time="1s"/>Should be done any moment now. ` +
+        `<break time="1s"/>Please say upcoming election again in a little bit. Thanks!</speak>`);
+    } else {
+      conv.ask(`Sorry, I'm still looking.
+        Please try again by saying 'upcoming election' in a few moments.`);
+    }
     conv.ask(new Suggestions(['upcoming election']));
     return election;
   }
@@ -1061,7 +1158,7 @@ function _help(conv, election) {
     if (options.length > 0) {
       conv.ask(`<speak>
         <p>Here are some things you can ask:</p>
-        ${options.map(option => `<p>${option}</p>`).join('')}
+        ${options.map(option => `<p>${option}</p>`).join(' ')}
       </speak>`);
     }
     conv.ask(`For a summary, you can ask, What's on my ballot?`);

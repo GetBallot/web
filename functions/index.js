@@ -29,11 +29,12 @@ const app = dialogflow({
 exports.dialogflowFirebaseFulfillment = functions.https.onRequest(app);
 
 app.intent('fallback', (conv, params) => {
+  civicinfo.init(conv, 'fallback');
   return civicinfo.fallback(db, conv, params);
 });
 
 app.intent('welcome', (conv) => {
-  civicinfo.saveVersion(conv);
+  civicinfo.init(conv, 'welcome');
   return civicinfo.fetchAddress(db, conv, false);
 });
 
@@ -101,6 +102,7 @@ app.intent('contests - all', (conv) => {
 });
 
 app.intent('contest', (conv, params) => {
+  civicinfo.init(conv, 'contest');
   return civicinfo.contest(db, conv, params);
 });
 app.intent('contest - which', (conv, params) => {
@@ -108,6 +110,7 @@ app.intent('contest - which', (conv, params) => {
 });
 
 app.intent('candidate', (conv, params) => {
+  civicinfo.init(conv, 'candidate');
   return civicinfo.candidate(db, conv, params);
 });
 app.intent('candidate - in contest', (conv, params) => {
@@ -128,6 +131,10 @@ app.intent('choice-by-party', (conv, params) => {
 });
 app.intent('choice - confirm', (conv, params) => {
   return civicinfo.choiceConfirm(db, conv, params);
+});
+
+app.intent('trigger-query - confirm', (conv, params) => {
+  return civicinfo.triggerQuery(db, conv, params);
 });
 
 app.intent('bye', (conv) => {
