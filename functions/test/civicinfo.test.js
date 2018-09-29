@@ -181,7 +181,7 @@ describe('CivicInfo', () => {
       const election = {
         contests: [ CO_CD_4, CO_HD_50 ]
       };
-      const input = 'State House';
+      const input = 'State House 48';
       const params = {
         office: 'State House',
         'number': 48
