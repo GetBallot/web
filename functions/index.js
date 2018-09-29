@@ -266,3 +266,12 @@ exports.userCivicInfoWritten = functions.firestore
           }
         });
     });
+
+exports.fetchElections = functions.firestore
+  .document('users/{userId}/triggers/address')
+  .onWrite(change => {
+    if (!change.after.exists) {
+      return Promise.resolve();
+    }
+    return civicinfo.fetchElections(db);
+});

@@ -217,6 +217,86 @@ exports.fetchCivicInfo = function(db, userId, input) {
   ]);
 }
 
+exports.fetchElections = function(db) {
+  var filtered = [];
+  var civicElections = null;
+  return db
+    .collection('elections').doc('all')
+    .get()
+    .then(snapshot => {
+      const elections = snapshot.exists ? snapshot.data() : null;
+      const modifiedAt = elections ? elections.modifiedAt : null;
+      const now = new Date();
+
+      // Fetch elections if older than 3 hours (10800000 ms)
+      const shouldUpdate = modifiedAt ? now - modifiedAt.toDate() > 10800000 : true;
+      if (!shouldUpdate) {
+        return Promise.resolve();
+      }
+
+      return civicinfo.elections.electionQuery();
+    })
+    .then(res => {
+      if (!res) {
+        return Promise.resolve();
+      }
+
+      civicElections = res.data;
+      const elections = civicElections ? civicElections.elections : null;
+
+      filtered = elections
+        .filter(election =>
+          election.id !== '2000' && election.name && election.electionDay && election.ocdDivisionId);
+
+      const promises = filtered
+        .map(election => {
+          const electionDay = election.electionDay.split('-').join('');
+          return db
+            .collection('divisions').doc(util.sanitize(election.ocdDivisionId))
+            .collection('langs').doc('en')
+            .collection('elections').doc(electionDay)
+            .get();
+        })
+
+      return Promise.all(promises);
+    })
+    .then(snapshots => {
+      if (!snapshots) {
+        return Promise.resolve();
+      }
+      const existing = snapshots
+        .filter(snapshot => snapshot.exists)
+        .map(snapshot => snapshot.data().id);
+
+      const promises = filtered
+        .filter(election => !existing.includes(election.id))
+        .map(election => {
+          const electionDay = election.electionDay.split('-').join('');
+          return db
+            .collection('divisions').doc(util.sanitize(election.ocdDivisionId))
+            .collection('langs').doc('en')
+            .collection('elections').doc(electionDay)
+            .set({
+              id: election.id,
+              name: election.name,
+              electionDay: electionDay,
+              modifiedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        });
+
+      return Promise.all(promises);
+    })
+    .then(_ => {
+      if (civicElections) {
+        civicElections.modifiedAt =  admin.firestore.FieldValue.serverTimestamp();
+        return db
+          .collection('elections').doc('all')
+          .set(civicElections);
+      }
+      return Promise.resolve();
+    });
+}
+
 exports.upcomingElection = function(db, conv) {
   return db
     .collection('users').doc(conv.user.storage.uniqid)
