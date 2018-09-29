@@ -273,6 +273,7 @@ function _filterUpcomingElection(divisions) {
   // Sort by division
   // Flatten
   const contests = divisions
+    .filter(division => division.contests)
     .filter(division => division.electionDay === upcoming.electionDay)
     .sort((a, b) => String(a.division).localeCompare(b.division))
     .map(division => division.contests.map(contest => {

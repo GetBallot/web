@@ -19,7 +19,7 @@ const civicinfo = google.civicinfo({
 exports.init = function(conv, intent) {
   if (!conv.data.version) {
     const key = Object.keys(conv.contexts.input)
-      .find(key => key.indexOf('version-') === 0)
+      .find(key => key.indexOf('version-') === 0);
     conv.data.version = key ? parseInt(key.substring(8)): 3;
   }
 
@@ -999,14 +999,17 @@ function _replyUpcomingElection(conv, election, prefix, returning) {
       _summarizeContests(conv, election);
       conv.ask(new Suggestions(['help']));
     } else {
-      conv.ask(`<speak><break time="1s"/>
-        That's all I got for now. Say 'change address' if you need to change it, otherwise you can say 'bye'.
-      </speak>`);
+      const checkAgain = _hasVotingLocation(election) ? '' :
+        'Please check again in about a week for voting location and contests. ';
+      conv.ask(`<speak><break time="1s"/>` +
+        `That's all I know for now. ${checkAgain}` +
+        `<break time="1s"/>Let me know if you need to change the voting address you gave me. ` +
+        `If not, you can say "I'm done".</speak>`);
       conv.ask(new Suggestions(['bye']));
     }
   } else {
     _setContext(conv, constants.CMD_CHANGE_ADDRESS);
-    const msg = returning ? `Welcome back! hmm, I don't see any elections` : `Sorry, I couldn't find any elections`;
+    const msg = returning ? `Welcome back! Right now I don't see any elections` : `Sorry, I couldn't find any elections`;
     conv.ask(new Confirmation(`${msg}. Would you like to change your address?`));
   }
   return election;
