@@ -1147,17 +1147,13 @@ function _askVotingLocationCard(conv, election) {
 function _replyVotingLocations(conv, election) {
   if (_hasVotingLocation(election)) {
     const location = election.votingLocations[0];
-    const place = location.address.locationName || location.formattedAddress;
-    const msg = `You can vote at ${place}.`;
+    const msg = `You can vote at ` + (location.address.locationName ?
+      location.address.locationName + ` at ` + location.formattedAddress :
+      location.formattedAddress) + `. `;
 
-    if (conv.data.version >= 4) {
-      conv.ask(msg);
-      _askVotingLocationCard(conv, election);
-      conv.ask(`What else would you like to know about?`);
-    } else {
-      _askVotingLocationCard(conv, election);
-      conv.close(msg);
-    }
+    conv.ask(msg);
+    _askVotingLocationCard(conv, election);
+    conv.ask(`What else would you like to know about?`);
   } else {
     conv.close(`Sorry, I couldn't find any voting locations.`);
   }
