@@ -224,11 +224,9 @@ exports.userCivicInfoWritten = functions.firestore
     const data = change.after.data();
     const lang = util.getLang(data.lang);
 
-    const electionFromRepresentatives =
-      ballot.compileElectionFromRepresentatives(db, data.representatives, data.address, lang);
-
-    return ballot.mergeElectionFromRepresentatives(db, userId, electionFromRepresentatives)
-      .then(election => {
+    return ballot.compileElectionFromRepresentatives(db, data.representatives, data.address, lang)
+      .then(electionFromRepresentatives => {
+        const election = ballot.mergeElectionFromRepresentatives(db, userId, electionFromRepresentatives);
         const promises = [];
         if (election.election || election.source === constants.SOURCE_BALLOT) {
           promises.push(db
@@ -239,7 +237,7 @@ exports.userCivicInfoWritten = functions.firestore
         promises.push(db
           .collection('users').doc(userId)
           .collection('elections').doc('fromRepresentatives')
-          .set(election));
+          .set(electionFromRepresentatives));
         return Promise.all(promises);
       });
   });
