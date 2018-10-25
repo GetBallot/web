@@ -400,7 +400,7 @@ function _replyContests(conv, contests) {
 function _askCandidatesInContest(conv, contest) {
   const candidates = contest.candidates || [];
   if (candidates.length === 0) {
-    conv.ask(`${contest.name} has no candidates. Any other contest you want to learn more about?`);
+    conv.ask(`${contest.name}${contest.referendumTitle ? '' : ' has no candidates'}. Any other contest you want to learn more about?`);
     return;
   }
   if (candidates.length === 1) {
@@ -408,6 +408,19 @@ function _askCandidatesInContest(conv, contest) {
     conv.ask(`${desc[0]} That is the only candidate. Anything else?`);
     return;
   }
+
+  const names = contest.candidates.map(candidate => candidate.name);
+  if (contest.referendumTitle) {
+    const suffix = 'Any other contest you want to learn more about?';
+    if (contest.referendumText) {
+      conv.ask(`${contest.name}:${contest.referendumSubtitle ? ' ' + contest.referendumSubtitle + '.' : ''} ${contest.referendumText}.` +
+        ` You can vote ${_joinWith(names, ', or ')}. ${suffix}`);
+    } else {
+      conv.ask(`${contest.name} has ${candidates.length} options: ${_joinWith(names, ', or ')}. ${suffix}`);
+    }
+    return;
+  }
+
   conv.contexts.set(constants.CMD_CANDIDATE_IN_CONTEST, 2, {
     contest: contest.index
   });
@@ -415,8 +428,6 @@ function _askCandidatesInContest(conv, contest) {
     contest: contest.index,
     candidates: contest.candidates.map((_, index) => index)
   });
-
-  const names = contest.candidates.map(candidate => candidate.name);
   conv.ask(`${contest.name} has ${candidates.length} candidates: ${_joinWith(names, ', and ')}. ${_whichOne('candidate')}`);
   _showSuggestions(conv, names);
 }
