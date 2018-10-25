@@ -28,12 +28,17 @@ exports.compileElectionFromVoterinfo = function(election, address, lang) {
         contest.candidates.forEach((candidate) => {
           candidate.favId = util.sanitize(favIdPrefix + '|' + candidate.name);
         });
-      }
-
-      if (contest.referendumBallotResponses) {
-        contest.referendumBallotResponses.forEach((response) => {
-          candidate.favId = util.sanitize(favIdPrefix + '|' + response);
-        });
+      } else {
+        contest.candidates = [];
+        if (contest.referendumBallotResponses) {
+          contest.referendumBallotResponses.forEach((response) => {
+            const candidate = {
+              name: response,
+              favId: util.sanitize(favIdPrefix + '|' + response)
+            };
+            contest.candidates.push(candidate);
+          });
+        }
       }
     })
   }
