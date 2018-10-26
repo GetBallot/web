@@ -413,7 +413,7 @@ function _askCandidatesInContest(conv, contest) {
 
   const names = contest.candidates.map(candidate => candidate.name);
   if (contest.referendumTitle) {
-    const suffix = 'Any other contest you want to learn more about?';
+    const suffix = `Any other ${contest.referendumText ? 'referendum' : 'contest'} you want to learn more about?`;
     if (contest.referendumText) {
       conv.ask(`${contest.name}:${contest.referendumSubtitle ? ' ' + contest.referendumSubtitle + '.' : ''} ${contest.referendumText}.` +
         ` You can vote ${_joinWith(names, ', or ')}. ${suffix}`);
