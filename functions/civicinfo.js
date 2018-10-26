@@ -179,6 +179,7 @@ exports.fetchCivicInfo = function(db, userId, input) {
     civicinfo.elections.voterInfoQuery(query)
       .then(res => {
        results.voterinfo = res.data;
+       results.modifiedAt = admin.firestore.FieldValue.serverTimestamp();
        return db
          .collection('users').doc(userId)
          .collection('triggers').doc('voterinfo')
@@ -206,6 +207,7 @@ exports.fetchCivicInfo = function(db, userId, input) {
       includeOffices: false
     }).then(res => {
       results.representatives = res.data;
+      results.modifiedAt = admin.firestore.FieldValue.serverTimestamp();
       if (input.updateUpcomingElection) {
         results.updateUpcomingElection = input.updateUpcomingElection;
       }

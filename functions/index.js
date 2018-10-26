@@ -190,6 +190,7 @@ exports.userVoterInfoWritten = functions.firestore
 
     const electionFromVoterInfo = data && data.voterinfo ?
       ballot.compileElectionFromVoterinfo(data.voterinfo, data.address, lang) : null;
+    electionFromVoterInfo.modifiedAt = admin.firestore.FieldValue.serverTimestamp();
 
     if (electionFromVoterInfo) {
       const promises = [];
@@ -226,6 +227,7 @@ exports.userCivicInfoWritten = functions.firestore
 
     return ballot.compileElectionFromRepresentatives(db, data.representatives, data.address, lang)
       .then(electionFromRepresentatives => {
+        electionFromRepresentatives.modifiedAt = admin.firestore.FieldValue.serverTimestamp();
         const election = ballot.mergeElectionFromRepresentatives(db, userId, electionFromRepresentatives);
         const promises = [];
         if (election.election || election.source === constants.SOURCE_BALLOT) {
