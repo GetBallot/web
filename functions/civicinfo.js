@@ -1013,7 +1013,7 @@ exports.choiceConfirm = function(db, conv, params) {
       return Promise.resolve();
     }
 
-    if (context.parameters.contest && context.parameters.contest < election.contests.length &&
+    if (context.parameters.contest !== null && context.parameters.contest < election.contests.length &&
         context.parameters.candidates && context.parameters.candidates.length === 1) {
       const contest = election.contests[context.parameters.contest];
       const candidatePos = context.parameters.candidates[0];
