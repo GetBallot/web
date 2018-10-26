@@ -1252,24 +1252,27 @@ function _summarizeContests(conv, election) {
 function _help(conv, election) {
   if (conv.data.version >= 4) {
     const options = [ ];
+
     if (_hasVotingLocation(election)) {
       options.push(`Where can I vote?`);
     }
-    if (_hasContests(election)) {
-      const contest = _pickRandomly(election.contests
-        .filter(contest => contest.candidates && contest.candidates.length > 0));
+
+    const contests = election && election.contests ? election.contests
+      .filter(contest => !contest.referendumTitle && contest.candidates && contest.candidates.length > 0) : [];
+    if (contests.length > 0) {
+      const contest = _pickRandomly(contests);
       options.push(`Who is running for ${contest.name}?`);
-      if (contest.candidates && contest.candidates.length > 0) {
-        const candidate = _pickRandomly(contest.candidates);
-        options.push(`Tell me about the candidate ${candidate.name}.`);
-      }
+      const candidate = _pickRandomly(contest.candidates);
+      options.push(`Tell me about the candidate ${candidate.name}.`);
     }
+
     if (options.length > 0) {
       conv.ask(`<speak>
         <p>Here are some things you can ask:</p>
         ${options.map(option => `<p>${option}</p>`).join(' ')}
       </speak>`);
     }
+
     conv.ask(`For a summary, you can ask, What's on my ballot?`);
 
     options.push(`What's on my ballot?`);
