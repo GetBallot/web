@@ -184,12 +184,13 @@ exports.fetchCivicInfo = function(db, userId, input) {
          .collection('users').doc(userId)
          .collection('triggers').doc('voterinfo')
          .set(results);
-     })
+      })
       .catch(_ => {
         const election = {
           lang: results.lang,
           address: results.address,
-          source: constants.SOURCE_GOOGLE
+          source: constants.SOURCE_GOOGLE,
+          modifiedAt: admin.firestore.FieldValue.serverTimestamp()
         };
         const promises = [];
         promises.push(db
